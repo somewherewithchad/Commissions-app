@@ -8,7 +8,10 @@ export const auth = betterAuth({
   database: prismaAdapter(db, {
     provider: "mysql",
   }),
-  trustedOrigins: ["http://localhost:3000"],
+  trustedOrigins: [
+    "http://localhost:3000",
+    "https://commission-hub.somewhere.ac",
+  ],
   socialProviders: {
     google: {
       prompt: "select_account",
