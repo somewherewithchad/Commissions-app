@@ -49,6 +49,12 @@ export const auth = betterAuth({
           },
         });
 
+        const recruitmentManager = await db.recruitmentManager.findUnique({
+          where: {
+            email: email,
+          },
+        });
+
         if (recruiter) {
           await db.recruiter.update({
             where: { id: recruiter.id },
@@ -62,6 +68,31 @@ export const auth = betterAuth({
           });
         } else {
           await db.recruiter.create({
+            data: {
+              name: ctx.context.newSession?.user.name ?? "",
+              email: email,
+              user: {
+                connect: {
+                  id: ctx.context.newSession?.user.id,
+                },
+              },
+            },
+          });
+        }
+
+        if (recruitmentManager) {
+          await db.recruitmentManager.update({
+            where: { id: recruitmentManager.id },
+            data: {
+              user: {
+                connect: {
+                  id: ctx.context.newSession?.user.id,
+                },
+              },
+            },
+          });
+        } else {
+          await db.recruitmentManager.create({
             data: {
               name: ctx.context.newSession?.user.name ?? "",
               email: email,
