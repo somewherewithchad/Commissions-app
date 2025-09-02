@@ -2,6 +2,7 @@ import { createTRPCRouter, createTRPCContext } from "@/server/api/trpc";
 import { z } from "zod";
 import { protectedProcedure, publicProcedure } from "@/server/api/trpc";
 import { addMonths, format, parse, subMonths } from "date-fns";
+import { Prisma } from "@prisma/client";
 
 export const recruiterRouter = createTRPCRouter({
   // Queries
@@ -328,6 +329,12 @@ export const recruiterRouter = createTRPCRouter({
         };
       }
 
+      const positiveDeals = input.deals.filter((d) => d.amountInvoiced >= 0);
+      const negativeAdjustments = input.deals.filter(
+        (d) => d.amountInvoiced < 0
+      );
+      let recalculationStartMonth = month;
+
       await ctx.db.$transaction(async (tx) => {
         await tx.recruiterInvoice.deleteMany({ where: { month: month } });
         await tx.recruiterCollection.deleteMany({ where: { month: month } });
@@ -339,7 +346,6 @@ export const recruiterRouter = createTRPCRouter({
         input.cashCollections.forEach((c) =>
           emailToName.set(c.recruiterEmail, c.recruiterName)
         );
-
         await Promise.all(
           Array.from(emailToName.entries()).map(([email, name]) =>
             tx.recruiter.upsert({
@@ -350,9 +356,9 @@ export const recruiterRouter = createTRPCRouter({
           )
         );
 
-        if (input.deals.length > 0) {
+        if (positiveDeals.length > 0) {
           await tx.recruiterInvoice.createMany({
-            data: input.deals.map((deal) => ({
+            data: positiveDeals.map((deal) => ({
               dealId: deal.dealId,
               dealLink: deal.dealLink,
               dealName: deal.dealName,
@@ -372,34 +378,77 @@ export const recruiterRouter = createTRPCRouter({
             })),
           });
         }
+
+        for (const adjustment of negativeAdjustments) {
+          try {
+            await tx.recruiterInvoice.update({
+              where: { dealId: adjustment.dealId },
+              data: {
+                amountInvoiced: {
+                  decrement: Math.abs(adjustment.amountInvoiced),
+                },
+              },
+            });
+          } catch (error) {
+            if (
+              error instanceof Prisma.PrismaClientKnownRequestError &&
+              error.code === "P2025"
+            ) {
+              throw new Error(
+                `Adjustment failed: The original deal with ID "${adjustment.dealId}" was not found.`
+              );
+            }
+            throw error;
+          }
+        }
       });
 
+      // --- Determine the TRUE start month for recalculation ---
+      if (negativeAdjustments.length > 0) {
+        const adjustmentDealIds = negativeAdjustments.map((adj) => adj.dealId);
+        const originalInvoices = await ctx.db.recruiterInvoice.findMany({
+          where: { dealId: { in: adjustmentDealIds } },
+          select: { month: true },
+        });
+
+        const allPossibleStartMonths = [
+          month,
+          ...originalInvoices.map((inv) => inv.month),
+        ];
+        allPossibleStartMonths.sort();
+
+        const earliestMonth = allPossibleStartMonths[0];
+        if (earliestMonth) {
+          recalculationStartMonth = earliestMonth;
+        }
+      }
+
+      // --- Massive Recalculation Logic (now starting from the correct month) ---
       const allRecruiters = await ctx.db.recruiter.findMany({
         select: { email: true },
       });
-      const allFutureSummaries = await ctx.db.recruiterMonthlySummary.findMany({
-        where: { month: { gte: month } },
-        select: { month: true },
-        distinct: ["month"],
-        orderBy: { month: "asc" },
-      });
+      const allSummariesAfterStart =
+        await ctx.db.recruiterMonthlySummary.findMany({
+          where: { month: { gte: recalculationStartMonth } },
+          select: { month: true },
+          distinct: ["month"],
+          orderBy: { month: "asc" },
+        });
       const monthsToProcess = [
-        ...new Set([month, ...allFutureSummaries.map((s) => s.month)]),
+        ...new Set([
+          recalculationStartMonth,
+          ...allSummariesAfterStart.map((s) => s.month),
+        ]),
       ].sort();
 
-      // Step 1: Refresh all data summaries from the changed month forward.
       for (const rec of allRecruiters) {
         for (const m of monthsToProcess) {
           await updateRecruiterMonthlySummary(m, rec.email, ctx);
         }
       }
-
-      // Step 2: Sync all status flags based on the now-correct summaries.
       for (const rec of allRecruiters) {
         await syncRecruiterThresholdStatus(rec.email, ctx);
       }
-
-      // Step 3: Calculate all payouts from the changed month forward.
       for (const rec of allRecruiters) {
         for (const m of monthsToProcess) {
           await calculateRecruiterPayouts(m, rec.email, ctx);
@@ -454,7 +503,6 @@ const calculateRecruiterPayouts = async (
 
   const totalCashCollected = summary.totalCashCollected;
 
-  // Clear any existing payouts for this month to prevent duplicates.
   await ctx.db.recruiterPayout.deleteMany({
     where: { sourceSummaryMonth: month, sourceRecruiterEmail: recruiterEmail },
   });
@@ -462,7 +510,6 @@ const calculateRecruiterPayouts = async (
   if (totalCashCollected > 0) {
     const baseRate = recruiter.has_reached_30k_deals_threshold ? 0.03 : 0.02;
 
-    // Payout 1: Base commission on the TOTAL cash collected, paid THIS month.
     await ctx.db.recruiterPayout.create({
       data: {
         amount: totalCashCollected * baseRate,
@@ -473,7 +520,6 @@ const calculateRecruiterPayouts = async (
       },
     });
 
-    // Payout 2: Bonus payout, only if the threshold is met AND cash is over 30k.
     if (
       totalCashCollected > 30000 &&
       recruiter.has_reached_30k_deals_threshold
