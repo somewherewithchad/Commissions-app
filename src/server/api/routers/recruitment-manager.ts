@@ -3,7 +3,8 @@ import {
   protectedProcedure,
   createTRPCContext,
 } from "@/server/api/trpc";
-import { addMonths, format, parse, subMonths } from "date-fns";
+import { Prisma } from "@prisma/client";
+import { addMonths, format, parse } from "date-fns";
 import { z } from "zod";
 
 export const recruitmentManagerRouter = createTRPCRouter({
@@ -479,8 +480,16 @@ export const recruitmentManagerRouter = createTRPCRouter({
         return { success: true, message: "No data to process." };
       }
 
+      const positiveInvoices = input.invoices.filter(
+        (i) => i.amountInvoiced >= 0
+      );
+      const negativeAdjustments = input.invoices.filter(
+        (i) => i.amountInvoiced < 0
+      );
+      let recalculationStartMonth = month;
+
       await ctx.db.$transaction(async (tx) => {
-        // Step 1: Wipe all data for this month.
+        // Step 1: Wipe the slate clean for the uploaded month.
         await tx.recruitmentManagerInvoice.deleteMany({
           where: { month: month },
         });
@@ -488,7 +497,7 @@ export const recruitmentManagerRouter = createTRPCRouter({
           where: { month: month },
         });
 
-        // Step 2: Upsert manager profiles from the new file.
+        // Step 2: Upsert manager profiles.
         const emailToNameMap = new Map<string, string>();
         input.invoices.forEach((i) =>
           emailToNameMap.set(i.managerEmail, i.managerName)
@@ -506,10 +515,10 @@ export const recruitmentManagerRouter = createTRPCRouter({
           )
         );
 
-        // Step 3: Insert the new data.
-        if (input.invoices.length > 0) {
+        // Step 3: Insert the NEW (positive) data for this month.
+        if (positiveInvoices.length > 0) {
           await tx.recruitmentManagerInvoice.createMany({
-            data: input.invoices.map((invoice) => ({
+            data: positiveInvoices.map((invoice) => ({
               dealId: invoice.dealId,
               dealLink: invoice.dealLink,
               dealName: invoice.dealName,
@@ -529,31 +538,78 @@ export const recruitmentManagerRouter = createTRPCRouter({
             })),
           });
         }
+
+        // Step 4: Process the NEGATIVE adjustments as updates to historical deals.
+        for (const adjustment of negativeAdjustments) {
+          try {
+            await tx.recruitmentManagerInvoice.update({
+              where: { dealId: adjustment.dealId },
+              data: {
+                amountInvoiced: {
+                  decrement: Math.abs(adjustment.amountInvoiced),
+                },
+              },
+            });
+          } catch (error) {
+            if (
+              error instanceof Prisma.PrismaClientKnownRequestError &&
+              error.code === "P2025"
+            ) {
+              throw new Error(
+                `Adjustment failed: The original deal with ID "${adjustment.dealId}" was not found.`
+              );
+            }
+            throw error;
+          }
+        }
       });
+
+      // Step 5: Determine the TRUE start month for recalculation.
+      if (negativeAdjustments.length > 0) {
+        const adjustmentDealIds = negativeAdjustments.map((adj) => adj.dealId);
+        const originalInvoices =
+          await ctx.db.recruitmentManagerInvoice.findMany({
+            where: { dealId: { in: adjustmentDealIds } },
+            select: { month: true },
+          });
+
+        const allPossibleStartMonths = [
+          month,
+          ...originalInvoices.map((inv) => inv.month),
+        ];
+        allPossibleStartMonths.sort();
+        const earliestMonth = allPossibleStartMonths[0];
+        if (earliestMonth) {
+          recalculationStartMonth = earliestMonth;
+        }
+      }
 
       // --- "MASSIVE RECALCULATION" LOGIC ---
       const allManagers = await ctx.db.recruitmentManager.findMany({
         select: { email: true },
       });
-      const allFutureSummaries =
+      const allSummariesAfterStart =
         await ctx.db.recruitmentManagerMonthlySummary.findMany({
-          where: { month: { gte: month } },
+          where: { month: { gte: recalculationStartMonth } },
           select: { month: true },
           distinct: ["month"],
           orderBy: { month: "asc" },
         });
       const monthsToRecalculate = [
-        ...new Set([month, ...allFutureSummaries.map((s) => s.month)]),
+        ...new Set([
+          recalculationStartMonth,
+          ...allSummariesAfterStart.map((s) => s.month),
+        ]),
       ].sort();
 
-      // Step 4: First, update all summaries for all affected months. This ensures the data is correct before calculating payouts.
+      // Step 6: First, update all summaries for all affected months.
       for (const manager of allManagers) {
         for (const m of monthsToRecalculate) {
           await updateManagerMonthlySummary(m, manager.email, ctx);
         }
       }
 
-      // Step 5: Then, calculate all payouts. This loop reads the now-correct summary data.
+      // Step 7: Then, calculate all payouts for all affected months.
       for (const manager of allManagers) {
         for (const m of monthsToRecalculate) {
           await calculateManagerPayouts(m, manager.email, ctx);
@@ -632,7 +688,6 @@ const calculateManagerPayouts = async (
 
     const totalInvoicedForMonth = monthlyInvoiceTotals.get(invoiceMonth) ?? 0;
 
-    // Base 1% payout, paid in the collection month
     await ctx.db.recruitmentManagerPayout.create({
       data: {
         amount: collection.amountPaid * 0.01,
@@ -642,7 +697,6 @@ const calculateManagerPayouts = async (
       },
     });
 
-    // Bonus payout logic
     let bonusRate = 0;
     if (totalInvoicedForMonth >= 150000) {
       bonusRate = 0.005;
