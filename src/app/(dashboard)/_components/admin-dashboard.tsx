@@ -51,7 +51,7 @@ export function AdminDashboard() {
         </Select>
       </div>
 
-      {renderForm(form)}
+      {renderForm(form as UserType)}
     </div>
   );
 }

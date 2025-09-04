@@ -11,7 +11,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
+import { cn, userTypes, type UserType } from "@/lib/utils";
 import { RecruiterPayouts } from "@/app/(dashboard)/payouts/_components/recruiter-payouts";
 import {
   Select,
@@ -21,13 +21,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RecruitmentManagerPayouts } from "@/app/(dashboard)/payouts/_components/recruitment-manager-payouts";
+import { AccountExecutivePayouts } from "@/app/(dashboard)/payouts/_components/account-executive-payouts";
 
 export function PayoutsPage() {
   const [selected, setSelected] = React.useState<Date | null>(new Date());
 
-  const [userType, setUserType] = React.useState<
-    "recruiter" | "recruitmentManager"
-  >("recruiter");
+  const [userType, setUserType] = React.useState<UserType>("recruiter");
+
+  const renderPayouts = () => {
+    if (userType === "recruiter") {
+      return <RecruiterPayouts selected={selected} />;
+    } else if (userType === "recruitmentManager") {
+      return <RecruitmentManagerPayouts selected={selected} />;
+    }
+    return <AccountExecutivePayouts selected={selected} />;
+  };
 
   return (
     <div className="space-y-4">
@@ -62,29 +70,22 @@ export function PayoutsPage() {
 
             <Select
               value={userType}
-              onValueChange={(value) =>
-                setUserType(value as "recruiter" | "recruitmentManager")
-              }
+              onValueChange={(value) => setUserType(value as UserType)}
             >
               <SelectTrigger id="form-select" aria-label="Select form">
                 <SelectValue placeholder="Select form" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="recruiter">Recruiter</SelectItem>
-                <SelectItem value="recruitmentManager">
-                  Recruitment Manager
-                </SelectItem>
+                {userTypes.map((type) => (
+                  <SelectItem key={type} value={type}>
+                    {type}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
         </CardHeader>
-        <CardContent>
-          {userType === "recruiter" ? (
-            <RecruiterPayouts selected={selected} />
-          ) : (
-            <RecruitmentManagerPayouts selected={selected} />
-          )}
-        </CardContent>
+        <CardContent>{renderPayouts()}</CardContent>
       </Card>
     </div>
   );
