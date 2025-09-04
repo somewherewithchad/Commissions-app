@@ -6,6 +6,90 @@ import {
 import { z } from "zod";
 
 export const accountExecutiveRouter = createTRPCRouter({
+  // Queries
+  getExecutiveData: protectedProcedure
+    .input(z.object({ year: z.string().regex(/^\d{4}$/) }))
+    .query(async ({ ctx, input }) => {
+      const executiveEmail = ctx.session.user.email;
+
+      const summaries = await ctx.db.accountExecutiveMonthlySummary.findMany({
+        where: { executiveEmail, month: { startsWith: input.year } },
+      });
+      const payouts = await ctx.db.accountExecutivePayout.findMany({
+        where: {
+          sourceExecutiveEmail: executiveEmail,
+          payoutMonth: { startsWith: input.year },
+        },
+      });
+
+      const summaryMap = new Map(summaries.map((s) => [s.month, s]));
+      const payoutMap = new Map<string, number>();
+      for (const p of payouts) {
+        payoutMap.set(
+          p.payoutMonth,
+          (payoutMap.get(p.payoutMonth) ?? 0) + p.amount
+        );
+      }
+
+      const results = Array.from({ length: 12 }, (_, i) => {
+        const month = `${input.year}-${String(i + 1).padStart(2, "0")}`;
+        const summary = summaryMap.get(month) ?? {
+          totalInvoiced: 0,
+          totalCollections: 0,
+        };
+        const totalPayout = payoutMap.get(month) ?? 0;
+        return {
+          month,
+          totalInvoiced: summary.totalInvoiced,
+          totalCollections: summary.totalCollections,
+          totalPayout,
+        };
+      });
+
+      return results;
+    }),
+  getExecutiveMonthDetails: protectedProcedure
+    .input(z.object({ month: z.string().regex(/^\d{4}-\d{2}$/) }))
+    .query(async ({ ctx, input }) => {
+      const executiveEmail = ctx.session.user.email;
+
+      const payouts = await ctx.db.accountExecutivePayout.findMany({
+        where: {
+          sourceExecutiveEmail: executiveEmail,
+          payoutMonth: input.month,
+        },
+        orderBy: { amount: "desc" },
+      });
+
+      const enriched = await Promise.all(
+        payouts.map(async (p) => {
+          const collections = await ctx.db.accountExecutiveCollection.findMany({
+            where: { executiveEmail, month: p.sourceSummaryMonth },
+            orderBy: { amountPaid: "desc" },
+          });
+          const dealIds = [...new Set(collections.map((c) => c.dealId))];
+          const invoices = await ctx.db.accountExecutiveInvoice.findMany({
+            where: { executiveEmail, dealId: { in: dealIds } },
+          });
+          const dealMap = new Map(invoices.map((inv) => [inv.dealId, inv]));
+          const sourceCollections = collections.map((c) => ({
+            id: c.id,
+            dealId: c.dealId,
+            dealName: dealMap.get(c.dealId)?.dealName ?? null,
+            dealLink: dealMap.get(c.dealId)?.dealLink ?? null,
+            amountPaid: c.amountPaid,
+          }));
+          return {
+            ...p,
+            type: "base" as const,
+            commissionRate: p.commissionRate,
+            sourceCollections,
+          };
+        })
+      );
+
+      return { payouts: enriched } as const;
+    }),
   addMonthlyData: protectedProcedure
     .input(
       z.object({
@@ -101,7 +185,7 @@ export const accountExecutiveRouter = createTRPCRouter({
               month: collection.month,
               dealId: collection.dealId,
               executiveEmail: collection.executiveEmail,
-              commissionRate: collection.commissionRate,
+              commissionRate: collection.commissionRate / 100,
             })),
           });
         }
