@@ -50,13 +50,12 @@ export const recruiterRouter = createTRPCRouter({
         }
       }
 
-      const enrichedSummaries: Array<
-        (typeof filledSummaries)[number] & {
-          currentMonthPayoutTotal: number;
-          delayedPayoutTotal: number;
-          totalPayout: number;
-        }
-      > = [];
+      const results: Array<{
+        month: string;
+        totalInvoiced: number;
+        totalCollections: number;
+        totalPayout: number;
+      }> = [];
 
       for (const summary of filledSummaries) {
         const currentMonthPayouts = await ctx.db.recruiterPayout.findMany({
@@ -101,15 +100,15 @@ export const recruiterRouter = createTRPCRouter({
           0
         );
 
-        enrichedSummaries.push({
-          ...summary,
-          currentMonthPayoutTotal,
-          delayedPayoutTotal,
+        results.push({
+          month: summary.month,
+          totalInvoiced: summary.totalDealsCompleted,
+          totalCollections: summary.totalCashCollected,
           totalPayout,
-        } as any);
+        });
       }
 
-      return enrichedSummaries;
+      return results;
     }),
   getRecruiterMonthDetails: protectedProcedure
     .input(

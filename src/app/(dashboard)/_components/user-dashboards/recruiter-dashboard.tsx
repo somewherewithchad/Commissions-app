@@ -28,13 +28,11 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 export function RecruiterDashboard() {
   const [year, setYear] = React.useState("2025");
   const [selectedMonth, setSelectedMonth] = React.useState<string | null>(null);
-  const [openPayouts, setOpenPayouts] = React.useState<Record<string, boolean>>(
-    {}
-  );
 
   const { data, isLoading } = api.recruiter.getRecruiterData.useQuery({ year });
   const monthDetails = api.recruiter.getRecruiterMonthDetails.useQuery(
@@ -80,9 +78,11 @@ export function RecruiterDashboard() {
                     {data.map((m) => (
                       <TableHead key={m.month}>
                         <Dialog
-                          onOpenChange={(open) =>
-                            !open && setSelectedMonth(null)
-                          }
+                          onOpenChange={(open) => {
+                            if (!open) {
+                              setSelectedMonth(null);
+                            }
+                          }}
                         >
                           <DialogTrigger asChild>
                             <Button
@@ -99,375 +99,138 @@ export function RecruiterDashboard() {
                           <DialogContent className="w-[95vw] !max-w-4xl max-h-[85vh] overflow-hidden">
                             <DialogHeader>
                               <DialogTitle>
+                                Payout Details for{" "}
                                 {format(
                                   parse(m.month, "yyyy-MM", new Date()),
                                   "MMMM yyyy"
-                                )}{" "}
-                                details
+                                )}
                               </DialogTitle>
                             </DialogHeader>
-                            <div className="max-h-[70vh] overflow-auto pr-1">
+                            <div className="max-h-[70vh] overflow-auto pr-4 space-y-4">
                               {!selectedMonth || monthDetails.isLoading ? (
                                 <div className="text-sm text-muted-foreground">
-                                  Loading...
+                                  Loading details...
                                 </div>
                               ) : monthDetails.data ? (
-                                <div className="space-y-6">
-                                  <div>
-                                    <h3 className="mb-2 font-semibold">
-                                      Deals completed
-                                    </h3>
-                                    {monthDetails.data.deals.length === 0 ? (
-                                      <div className="text-sm text-muted-foreground">
-                                        No deals
-                                      </div>
-                                    ) : (
-                                      <div className="max-h-[45vh] w-full overflow-auto overflow-x-auto rounded border">
-                                        <Table className="min-w-max">
-                                          <TableHeader>
-                                            <TableRow>
-                                              <TableHead>Deal ID</TableHead>
-                                              <TableHead>Deal Name</TableHead>
-                                              <TableHead>Deal Link</TableHead>
-                                              <TableHead className="text-right">
-                                                Amount Invoiced
-                                              </TableHead>
-                                              <TableHead>
-                                                Recruiter Email
-                                              </TableHead>
-                                            </TableRow>
-                                          </TableHeader>
-                                          <TableBody>
-                                            {monthDetails.data.deals.map(
-                                              (d) => (
-                                                <TableRow key={d.id}>
-                                                  <TableCell>
-                                                    {d.dealId}
-                                                  </TableCell>
-                                                  <TableCell>
-                                                    {d.dealName}
-                                                  </TableCell>
-                                                  <TableCell>
-                                                    {d.dealLink ? (
-                                                      <a
-                                                        href={d.dealLink}
-                                                        target="_blank"
-                                                        rel="noreferrer"
-                                                        className="text-primary underline-offset-4 hover:underline"
-                                                      >
-                                                        Open
-                                                      </a>
-                                                    ) : (
-                                                      <span className="text-muted-foreground">
-                                                        —
-                                                      </span>
-                                                    )}
-                                                  </TableCell>
-                                                  <TableCell className="text-right">
-                                                    {formatCurrency(
-                                                      d.amountInvoiced
-                                                    )}
-                                                  </TableCell>
-                                                  <TableCell>
-                                                    {d.recruiterEmail}
-                                                  </TableCell>
-                                                </TableRow>
-                                              )
-                                            )}
-                                          </TableBody>
-                                        </Table>
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  <div>
-                                    <h3 className="mb-2 font-semibold">
-                                      Cash collected
-                                    </h3>
-                                    {monthDetails.data.cashCollections
-                                      .length === 0 ? (
-                                      <div className="text-sm text-muted-foreground">
-                                        No cash collections
-                                      </div>
-                                    ) : (
-                                      <div className="max-h-[45vh] w-full overflow-auto overflow-x-auto rounded border">
-                                        <Table className="min-w-max">
-                                          <TableHeader>
-                                            <TableRow>
-                                              <TableHead>Deal ID</TableHead>
-                                              <TableHead>Deal Name</TableHead>
-                                              <TableHead>Deal Link</TableHead>
-                                              <TableHead className="text-right">
-                                                Amount Paid
-                                              </TableHead>
-                                              <TableHead>
-                                                Recruiter Email
-                                              </TableHead>
-                                            </TableRow>
-                                          </TableHeader>
-                                          <TableBody>
-                                            {monthDetails.data.cashCollections.map(
-                                              (c) => (
-                                                <TableRow key={c.id}>
-                                                  <TableCell>
-                                                    {c.dealId}
-                                                  </TableCell>
-                                                  <TableCell>
-                                                    {c.dealName ?? "—"}
-                                                  </TableCell>
-                                                  <TableCell>
-                                                    {c.dealLink ? (
-                                                      <a
-                                                        href={c.dealLink}
-                                                        target="_blank"
-                                                        rel="noreferrer"
-                                                        className="text-primary underline-offset-4 hover:underline"
-                                                      >
-                                                        Open
-                                                      </a>
-                                                    ) : (
-                                                      <span className="text-muted-foreground">
-                                                        —
-                                                      </span>
-                                                    )}
-                                                  </TableCell>
-                                                  <TableCell className="text-right">
-                                                    {formatCurrency(
-                                                      c.amountPaid
-                                                    )}
-                                                  </TableCell>
-                                                  <TableCell>
-                                                    {c.recruiterEmail}
-                                                  </TableCell>
-                                                </TableRow>
-                                              )
-                                            )}
-                                          </TableBody>
-                                        </Table>
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  <div>
-                                    <h3 className="mb-2 font-semibold">
-                                      Payouts paid this month
-                                    </h3>
-                                    {monthDetails.data.payouts.length === 0 ? (
-                                      <div className="text-sm text-muted-foreground">
-                                        No payouts
-                                      </div>
-                                    ) : (
-                                      <div className="max-h-[45vh] w-full overflow-auto overflow-x-auto rounded border">
-                                        <Table className="min-w-max">
-                                          <TableHeader>
-                                            <TableRow>
-                                              <TableHead>
-                                                Source Month
-                                              </TableHead>
-                                              <TableHead className="text-right">
-                                                Amount
-                                              </TableHead>
-                                              <TableHead className="text-right">
-                                                Rate
-                                              </TableHead>
-                                              <TableHead>Calculation</TableHead>
-                                              <TableHead>Details</TableHead>
-                                            </TableRow>
-                                          </TableHeader>
-                                          <TableBody>
-                                            {monthDetails.data.payouts.map(
-                                              (p) => (
-                                                <>
-                                                  <TableRow key={p.id}>
-                                                    <TableCell>
-                                                      {format(
-                                                        parse(
-                                                          p.sourceSummaryMonth,
-                                                          "yyyy-MM",
-                                                          new Date()
-                                                        ),
-                                                        "MMMM yyyy"
-                                                      )}
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                      {formatCurrency(p.amount)}
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                      {(
-                                                        p.commissionRate * 100
-                                                      ).toFixed(0)}
-                                                      %
-                                                    </TableCell>
-                                                    <TableCell>
-                                                      {(() => {
-                                                        const total =
-                                                          p.sourceCashCollections.reduce(
-                                                            (
-                                                              acc: number,
-                                                              c: any
-                                                            ) =>
-                                                              acc +
-                                                              c.amountPaid,
-                                                            0
-                                                          );
-                                                        const isDelayedBonus =
-                                                          p.payoutMonth !==
-                                                          p.sourceSummaryMonth;
-                                                        if (isDelayedBonus) {
-                                                          const remainder =
-                                                            Math.max(
-                                                              total - 30000,
-                                                              0
-                                                            );
-                                                          return `${formatCurrency(
-                                                            remainder
-                                                          )} x 2% (bonus over 30k)`;
-                                                        }
-                                                        if (
-                                                          p.commissionRate ===
-                                                          0.03
-                                                        ) {
-                                                          return `${formatCurrency(
-                                                            total
-                                                          )} x 3%`;
-                                                        }
-                                                        if (
-                                                          p.commissionRate ===
-                                                          0.02
-                                                        ) {
-                                                          return `${formatCurrency(
-                                                            total
-                                                          )} x 2%`;
-                                                        }
-                                                        return "—";
-                                                      })()}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                      <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() =>
-                                                          setOpenPayouts(
-                                                            (s) => ({
-                                                              ...s,
-                                                              [p.id]: !s[p.id],
-                                                            })
-                                                          )
-                                                        }
-                                                      >
-                                                        {openPayouts[p.id]
-                                                          ? "Hide"
-                                                          : "View"}
-                                                      </Button>
-                                                    </TableCell>
+                                <>
+                                  {monthDetails.data.payouts.length === 0 ? (
+                                    <div className="text-sm text-muted-foreground">
+                                      No payouts were paid this month.
+                                    </div>
+                                  ) : (
+                                    monthDetails.data.payouts.map((payout) => {
+                                      const isDelayedBonus =
+                                        payout.payoutMonth !==
+                                        payout.sourceSummaryMonth;
+                                      const ratePercent = (
+                                        payout.commissionRate * 100
+                                      ).toFixed(2);
+                                      return (
+                                        <Card key={payout.id}>
+                                          <CardHeader className="flex-row items-start justify-between pb-2">
+                                            <div>
+                                              <p className="text-sm text-muted-foreground">
+                                                Payout Amount
+                                              </p>
+                                              <p className="text-2xl font-bold">
+                                                {formatCurrency(payout.amount)}
+                                              </p>
+                                            </div>
+                                            <Badge>
+                                              {ratePercent}%{" "}
+                                              {isDelayedBonus
+                                                ? "Bonus"
+                                                : "Base"}
+                                            </Badge>
+                                          </CardHeader>
+                                          <CardContent>
+                                            <div className="text-sm text-muted-foreground mb-2">
+                                              This payout was calculated from
+                                              cash collected in{" "}
+                                              <strong>
+                                                {format(
+                                                  parse(
+                                                    payout.sourceSummaryMonth,
+                                                    "yyyy-MM",
+                                                    new Date()
+                                                  ),
+                                                  "MMMM yyyy"
+                                                )}
+                                              </strong>
+                                              .
+                                            </div>
+                                            <div className="rounded-md border">
+                                              <Table>
+                                                <TableHeader>
+                                                  <TableRow>
+                                                    <TableHead>
+                                                      Deal ID
+                                                    </TableHead>
+                                                    <TableHead>
+                                                      Deal Name
+                                                    </TableHead>
+                                                    <TableHead className="text-right">
+                                                      Cash Collected
+                                                    </TableHead>
+                                                    <TableHead className="text-right">
+                                                      Rate
+                                                    </TableHead>
+                                                    <TableHead className="text-right">
+                                                      Commission
+                                                    </TableHead>
                                                   </TableRow>
-                                                  {openPayouts[p.id] && (
+                                                </TableHeader>
+                                                <TableBody>
+                                                  {payout.sourceCashCollections &&
+                                                  payout.sourceCashCollections
+                                                    .length > 0 ? (
+                                                    payout.sourceCashCollections.map(
+                                                      (c: any) => (
+                                                        <TableRow key={c.id}>
+                                                          <TableCell className="font-medium">
+                                                            {c.dealId}
+                                                          </TableCell>
+                                                          <TableCell>
+                                                            {c.dealName ?? "—"}
+                                                          </TableCell>
+                                                          <TableCell className="text-right">
+                                                            {formatCurrency(
+                                                              c.amountPaid
+                                                            )}
+                                                          </TableCell>
+                                                          <TableCell className="text-right">
+                                                            {ratePercent}%
+                                                          </TableCell>
+                                                          <TableCell className="text-right">
+                                                            {formatCurrency(
+                                                              c.amountPaid *
+                                                                payout.commissionRate
+                                                            )}
+                                                          </TableCell>
+                                                        </TableRow>
+                                                      )
+                                                    )
+                                                  ) : (
                                                     <TableRow>
-                                                      <TableCell colSpan={5}>
-                                                        <div className="space-y-2">
-                                                          <div className="text-sm text-muted-foreground">
-                                                            Source cash
-                                                            collections
-                                                            contributing to this
-                                                            payout
-                                                          </div>
-                                                          <div className="max-h-48 w-full overflow-auto rounded border">
-                                                            <Table className="min-w-max">
-                                                              <TableHeader>
-                                                                <TableRow>
-                                                                  <TableHead>
-                                                                    Deal ID
-                                                                  </TableHead>
-                                                                  <TableHead>
-                                                                    Deal Name
-                                                                  </TableHead>
-                                                                  <TableHead className="text-right">
-                                                                    Amount Paid
-                                                                  </TableHead>
-                                                                  <TableHead>
-                                                                    Deal Link
-                                                                  </TableHead>
-                                                                </TableRow>
-                                                              </TableHeader>
-                                                              <TableBody>
-                                                                {p.sourceCashCollections.map(
-                                                                  (c: any) => (
-                                                                    <TableRow
-                                                                      key={c.id}
-                                                                    >
-                                                                      <TableCell>
-                                                                        {
-                                                                          c.dealId
-                                                                        }
-                                                                      </TableCell>
-                                                                      <TableCell>
-                                                                        {c.dealName ??
-                                                                          "—"}
-                                                                      </TableCell>
-                                                                      <TableCell className="text-right">
-                                                                        {formatCurrency(
-                                                                          c.amountPaid
-                                                                        )}
-                                                                      </TableCell>
-                                                                      <TableCell>
-                                                                        {c.dealLink ? (
-                                                                          <a
-                                                                            href={
-                                                                              c.dealLink
-                                                                            }
-                                                                            target="_blank"
-                                                                            rel="noreferrer"
-                                                                            className="text-primary underline-offset-4 hover:underline"
-                                                                          >
-                                                                            Open
-                                                                          </a>
-                                                                        ) : (
-                                                                          <span className="text-muted-foreground">
-                                                                            —
-                                                                          </span>
-                                                                        )}
-                                                                      </TableCell>
-                                                                    </TableRow>
-                                                                  )
-                                                                )}
-                                                                <TableRow>
-                                                                  <TableCell
-                                                                    colSpan={2}
-                                                                    className="font-medium"
-                                                                  >
-                                                                    Total
-                                                                  </TableCell>
-                                                                  <TableCell className="text-right font-medium">
-                                                                    {formatCurrency(
-                                                                      p.sourceCashCollections.reduce(
-                                                                        (
-                                                                          acc: number,
-                                                                          c: any
-                                                                        ) =>
-                                                                          acc +
-                                                                          c.amountPaid,
-                                                                        0
-                                                                      )
-                                                                    )}
-                                                                  </TableCell>
-                                                                  <TableCell />
-                                                                </TableRow>
-                                                              </TableBody>
-                                                            </Table>
-                                                          </div>
-                                                        </div>
+                                                      <TableCell
+                                                        colSpan={5}
+                                                        className="text-sm text-muted-foreground"
+                                                      >
+                                                        Could not identify the
+                                                        exact source collections
+                                                        for this payout.
                                                       </TableCell>
                                                     </TableRow>
                                                   )}
-                                                </>
-                                              )
-                                            )}
-                                          </TableBody>
-                                        </Table>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
+                                                </TableBody>
+                                              </Table>
+                                            </div>
+                                          </CardContent>
+                                        </Card>
+                                      );
+                                    })
+                                  )}
+                                </>
                               ) : (
                                 <div className="text-sm text-destructive">
                                   Failed to load.
@@ -482,25 +245,27 @@ export function RecruiterDashboard() {
                 </TableHeader>
                 <TableBody>
                   <TableRow>
-                    <TableCell className="font-semibold">Deals</TableCell>
+                    <TableCell className="font-semibold">
+                      Total Invoiced
+                    </TableCell>
                     {data.map((m) => (
                       <TableCell key={m.month}>
-                        {formatCurrency(m.totalDealsCompleted)}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                  <TableRow>
-                    <TableCell className="font-semibold">Cash</TableCell>
-                    {data.map((m) => (
-                      <TableCell key={m.month}>
-                        {formatCurrency(m.totalCashCollected)}
+                        {formatCurrency(m.totalInvoiced)}
                       </TableCell>
                     ))}
                   </TableRow>
                   <TableRow>
                     <TableCell className="font-semibold">
-                      Total Payout
+                      Total Collections
                     </TableCell>
+                    {data.map((m) => (
+                      <TableCell key={m.month}>
+                        {formatCurrency(m.totalCollections)}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                  <TableRow className="bg-muted/50 font-bold">
+                    <TableCell>Total Payout this Month</TableCell>
                     {data.map((m) => (
                       <TableCell key={m.month}>
                         {formatCurrency(m.totalPayout)}
