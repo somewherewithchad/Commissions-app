@@ -35,7 +35,7 @@ const invoicesCsvRequiredHeaders = [
 
 const collectionsCsvRequiredHeaders = [
   "Deal ID",
-  "Recruiter Name",
+  "Account Executive Name",
   "Account Executive Email",
   "Amount paid",
   "Month",
@@ -59,6 +59,22 @@ export function AccountExecutiveDataForm() {
   >(null);
   const invoicesInputRef = useRef<HTMLInputElement>(null);
   const collectionsInputRef = useRef<HTMLInputElement>(null);
+
+  const addMonthlyData = api.accountExecutive.addMonthlyData.useMutation({
+    onSuccess: (res) => {
+      toast.success(res.message);
+      setInvoicesFile(null);
+      setInvoicesMonthToken(null);
+      setCollectionsFile(null);
+      setCollectionsMonthToken(null);
+      if (invoicesInputRef.current) invoicesInputRef.current.value = "";
+      if (collectionsInputRef.current) collectionsInputRef.current.value = "";
+    },
+    onError: (err) => {
+      console.error(err);
+      toast.error(err.message);
+    },
+  });
 
   function ensureSameMonthOrReset(
     which: "invoice" | "collection",
@@ -141,7 +157,10 @@ export function AccountExecutiveDataForm() {
         return;
       }
 
-      // add monthly data mutation comes here later
+      addMonthlyData.mutate({
+        invoices: [],
+        collections: [],
+      });
     } catch (err) {
       console.error(err);
     }
@@ -263,9 +282,9 @@ export function AccountExecutiveDataForm() {
             </div>
 
             <CardFooter className="px-0">
-              {/* <Button type="submit" disabled={addMonthlyData.isPending}>
+              <Button type="submit" disabled={addMonthlyData.isPending}>
                 {addMonthlyData.isPending ? "Uploading..." : "Submit"}
-              </Button> */}
+              </Button>
             </CardFooter>
           </form>
         </CardContent>
