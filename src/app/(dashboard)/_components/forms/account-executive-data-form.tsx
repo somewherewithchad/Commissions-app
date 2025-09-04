@@ -158,8 +158,23 @@ export function AccountExecutiveDataForm() {
       }
 
       addMonthlyData.mutate({
-        invoices: [],
-        collections: [],
+        invoices: invoiceRows.map((invoice) => ({
+          dealId: invoice["Deal ID"],
+          dealLink: invoice["Deal link"],
+          dealName: invoice["Deal name"],
+          executiveName: invoice["Account Executive Name"],
+          executiveEmail: invoice["Account Executive Email"].toLowerCase(),
+          amountInvoiced: Number(invoice["Amount invoiced"].replace(/,/g, "")),
+          month: convertToYearMonth(canonicalMonth),
+        })),
+        collections: collectionRows.map((collection) => ({
+          dealId: collection["Deal ID"],
+          executiveName: collection["Account Executive Name"],
+          executiveEmail: collection["Account Executive Email"].toLowerCase(),
+          amountPaid: Number(collection["Amount paid"].replace(/,/g, "")),
+          month: convertToYearMonth(canonicalMonth),
+          commissionRate: Number(collection["% commission"]),
+        })),
       });
     } catch (err) {
       console.error(err);
@@ -219,8 +234,8 @@ export function AccountExecutiveDataForm() {
               <p className="text-xs text-muted-foreground">
                 Required columns:
                 <br />
-                Deal ID, Deal link, Deal name, Recruitment managerName,
-                Recruitment Manager Email, Amount invoiced, Month
+                Deal ID, Deal link, Deal name, Account Executive Name, Account
+                Executive Email, Amount invoiced, Month
               </p>
               <p className="text-xs text-muted-foreground">
                 Example CSV filename:
@@ -271,8 +286,8 @@ export function AccountExecutiveDataForm() {
               <p className="text-xs text-muted-foreground">
                 Required columns:
                 <br />
-                Deal ID, Recruitment Manager Name, Recruiter Email, Amount paid,
-                Month
+                Deal ID, Account Executive Name, Account Executive Email, Amount
+                paid, Month, % commission
               </p>
               <p className="text-xs text-muted-foreground">
                 Example CSV filename:

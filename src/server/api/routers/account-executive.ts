@@ -35,6 +35,8 @@ export const accountExecutiveRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ input, ctx }) => {
+      console.log("=============> ", input);
+
       return {
         success: true,
         message: "Monthly data added successfully",
