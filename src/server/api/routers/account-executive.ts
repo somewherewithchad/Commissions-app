@@ -90,6 +90,67 @@ export const accountExecutiveRouter = createTRPCRouter({
 
       return { payouts: enriched } as const;
     }),
+  getPayoutsByMonth: protectedProcedure
+    .input(z.object({ month: z.string().regex(/^\d{4}-\d{2}$/) }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.session?.user?.role !== "admin") {
+        throw new Error("Not authorized");
+      }
+
+      const payouts = await ctx.db.accountExecutivePayout.findMany({
+        where: { payoutMonth: input.month },
+        orderBy: { amount: "desc" },
+      });
+      if (payouts.length === 0) return [] as const;
+
+      const emails = [...new Set(payouts.map((p) => p.sourceExecutiveEmail))];
+      const sourceMonths = [
+        ...new Set(payouts.map((p) => p.sourceSummaryMonth)),
+      ];
+      const executives = await ctx.db.accountExecutive.findMany({
+        where: { email: { in: emails } },
+      });
+      const emailToExec = new Map(executives.map((e) => [e.email, e]));
+
+      const allCollections = await ctx.db.accountExecutiveCollection.findMany({
+        where: { executiveEmail: { in: emails }, month: { in: sourceMonths } },
+      });
+      const collectionsByKey = new Map<string, typeof allCollections>();
+      const keyFor = (email: string, month: string) => `${email}__${month}`;
+      for (const c of allCollections) {
+        const k = keyFor(c.executiveEmail, c.month);
+        const list = collectionsByKey.get(k);
+        if (list) list.push(c);
+        else collectionsByKey.set(k, [c]);
+      }
+
+      const allDealIds = [...new Set(allCollections.map((c) => c.dealId))];
+      const invoices = await ctx.db.accountExecutiveInvoice.findMany({
+        where: { executiveEmail: { in: emails }, dealId: { in: allDealIds } },
+      });
+      const dealIdToInvoice = new Map(invoices.map((inv) => [inv.dealId, inv]));
+
+      const results = payouts.map((p) => {
+        const cols =
+          collectionsByKey.get(
+            keyFor(p.sourceExecutiveEmail, p.sourceSummaryMonth)
+          ) ?? [];
+        const sourceCollections = cols.map((c) => ({
+          id: c.id,
+          dealId: c.dealId,
+          dealName: dealIdToInvoice.get(c.dealId)?.dealName ?? null,
+          dealLink: dealIdToInvoice.get(c.dealId)?.dealLink ?? null,
+          amountPaid: c.amountPaid,
+        }));
+        return {
+          ...p,
+          executiveName: emailToExec.get(p.sourceExecutiveEmail)?.name ?? null,
+          sourceCollections,
+        } as const;
+      });
+
+      return results;
+    }),
   addMonthlyData: protectedProcedure
     .input(
       z.object({

@@ -13,6 +13,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatCurrency } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
 export function RecruitmentManagerPayouts({
   selected,
@@ -29,9 +38,8 @@ export function RecruitmentManagerPayouts({
     { enabled: !!monthString }
   );
 
-  const [openRows, setOpenRows] = React.useState<Record<string, boolean>>({});
-  const [openPayouts, setOpenPayouts] = React.useState<Record<string, boolean>>(
-    {}
+  const [selectedManager, setSelectedManager] = React.useState<string | null>(
+    null
   );
 
   const groupedByManager = React.useMemo(() => {
@@ -95,98 +103,111 @@ export function RecruitmentManagerPayouts({
                       {formatCurrency(row.totalAmount)}
                     </TableCell>
                     <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                          setOpenRows((s) => ({
-                            ...s,
-                            [row.managerEmail]: !s[row.managerEmail],
-                          }))
+                      <Dialog
+                        onOpenChange={(open) =>
+                          !open && setSelectedManager(null)
                         }
                       >
-                        {openRows[row.managerEmail] ? "Hide" : "View"}
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                  {openRows[row.managerEmail] && (
-                    <TableRow>
-                      <TableCell colSpan={3}>
-                        <div className="space-y-3">
-                          <div className="text-sm font-medium">
-                            Payout components paid this month
-                          </div>
-                          <div className="max-h-[50vh] w-full overflow-auto rounded border">
-                            <Table className="min-w-max">
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead>Source Collection Month</TableHead>
-                                  <TableHead className="text-right">
-                                    Amount
-                                  </TableHead>
-                                  <TableHead className="text-right">
-                                    Rate
-                                  </TableHead>
-                                  <TableHead>Calculation</TableHead>
-                                  <TableHead>Details</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {row.payouts.map((p: any) => {
-                                  const calcLabel = (() => {
-                                    const amountPaid =
-                                      p.sourceCollection?.amountPaid ?? 0;
-                                    if (
-                                      p.type === "base" ||
-                                      p.commissionRate === 0.01
-                                    ) {
-                                      return `${formatCurrency(
-                                        amountPaid
-                                      )} x 1%`;
-                                    }
-                                    if (p.commissionRate === 0.0025) {
-                                      return `${formatCurrency(
-                                        amountPaid
-                                      )} x 0.25% (invoice total ${formatCurrency(
-                                        p.sourceInvoiceTotal || 0
-                                      )} in ${
-                                        p.sourceInvoiceMonth
-                                          ? format(
-                                              parse(
-                                                p.sourceInvoiceMonth,
-                                                "yyyy-MM",
-                                                new Date()
-                                              ),
-                                              "MMM yyyy"
-                                            )
-                                          : "—"
-                                      })`;
-                                    }
-                                    if (p.commissionRate === 0.005) {
-                                      return `${formatCurrency(
-                                        amountPaid
-                                      )} x 0.5% (invoice total ${formatCurrency(
-                                        p.sourceInvoiceTotal || 0
-                                      )} in ${
-                                        p.sourceInvoiceMonth
-                                          ? format(
-                                              parse(
-                                                p.sourceInvoiceMonth,
-                                                "yyyy-MM",
-                                                new Date()
-                                              ),
-                                              "MMM yyyy"
-                                            )
-                                          : "—"
-                                      })`;
-                                    }
-                                    return "—";
-                                  })();
-
-                                  return (
-                                    <React.Fragment key={p.id}>
-                                      <TableRow>
-                                        <TableCell>
+                        <DialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setSelectedManager(row.managerEmail)}
+                          >
+                            View
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="w-[95vw] !max-w-4xl max-h-[85vh] overflow-hidden">
+                          <DialogHeader>
+                            <DialogTitle>
+                              Payout Details for{" "}
+                              {row.managerName ?? row.managerEmail} —{" "}
+                              {monthString
+                                ? format(
+                                    parse(monthString, "yyyy-MM", new Date()),
+                                    "MMMM yyyy"
+                                  )
+                                : ""}
+                            </DialogTitle>
+                          </DialogHeader>
+                          <div className="max-h-[70vh] overflow-auto pr-4 space-y-4">
+                            {row.payouts.length === 0 ? (
+                              <div className="text-sm text-muted-foreground">
+                                No payouts for this user.
+                              </div>
+                            ) : (
+                              row.payouts.map((p: any) => {
+                                const amountPaid =
+                                  p.sourceCollection?.amountPaid ?? 0;
+                                const ratePercent = (
+                                  p.commissionRate * 100
+                                ).toFixed(2);
+                                const calcLabel = (() => {
+                                  if (
+                                    p.type === "base" ||
+                                    p.commissionRate === 0.01
+                                  ) {
+                                    return `${formatCurrency(amountPaid)} x 1%`;
+                                  }
+                                  if (p.commissionRate === 0.0025) {
+                                    return `${formatCurrency(
+                                      amountPaid
+                                    )} x 0.25% (invoice total ${formatCurrency(
+                                      p.sourceInvoiceTotal || 0
+                                    )} in ${
+                                      p.sourceInvoiceMonth
+                                        ? format(
+                                            parse(
+                                              p.sourceInvoiceMonth,
+                                              "yyyy-MM",
+                                              new Date()
+                                            ),
+                                            "MMM yyyy"
+                                          )
+                                        : "—"
+                                    })`;
+                                  }
+                                  if (p.commissionRate === 0.005) {
+                                    return `${formatCurrency(
+                                      amountPaid
+                                    )} x 0.5% (invoice total ${formatCurrency(
+                                      p.sourceInvoiceTotal || 0
+                                    )} in ${
+                                      p.sourceInvoiceMonth
+                                        ? format(
+                                            parse(
+                                              p.sourceInvoiceMonth,
+                                              "yyyy-MM",
+                                              new Date()
+                                            ),
+                                            "MMM yyyy"
+                                          )
+                                        : "—"
+                                    })`;
+                                  }
+                                  return "—";
+                                })();
+                                return (
+                                  <Card key={p.id}>
+                                    <CardHeader className="flex-row items-start justify-between pb-2">
+                                      <div>
+                                        <p className="text-sm text-muted-foreground">
+                                          Payout Amount
+                                        </p>
+                                        <p className="text-2xl font-bold">
+                                          {formatCurrency(p.amount)}
+                                        </p>
+                                      </div>
+                                      <Badge>
+                                        {ratePercent}%{" "}
+                                        {p.type === "bonus" ? "Bonus" : "Base"}
+                                      </Badge>
+                                    </CardHeader>
+                                    <CardContent>
+                                      <div className="text-sm text-muted-foreground mb-2">
+                                        This payout was calculated from cash
+                                        collected in{" "}
+                                        <strong>
                                           {format(
                                             parse(
                                               p.sourceSummaryMonth,
@@ -195,125 +216,80 @@ export function RecruitmentManagerPayouts({
                                             ),
                                             "MMMM yyyy"
                                           )}
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                          {formatCurrency(p.amount)}
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                          {(p.commissionRate * 100).toFixed(2)}%
-                                        </TableCell>
-                                        <TableCell>{calcLabel}</TableCell>
-                                        <TableCell>
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() =>
-                                              setOpenPayouts((s) => ({
-                                                ...s,
-                                                [p.id]: !s[p.id],
-                                              }))
-                                            }
-                                          >
-                                            {openPayouts[p.id]
-                                              ? "Hide"
-                                              : "View"}
-                                          </Button>
-                                        </TableCell>
-                                      </TableRow>
-                                      {openPayouts[p.id] && (
-                                        <TableRow>
-                                          <TableCell colSpan={5}>
-                                            <div className="space-y-2">
-                                              <div className="text-sm text-muted-foreground">
-                                                Source cash collection
-                                                contributing to this payout
-                                              </div>
-                                              <div className="max-h-48 w-full overflow-auto rounded border">
-                                                <Table className="min-w-max">
-                                                  <TableHeader>
-                                                    <TableRow>
-                                                      <TableHead>
-                                                        Deal ID
-                                                      </TableHead>
-                                                      <TableHead>
-                                                        Deal Name
-                                                      </TableHead>
-                                                      <TableHead className="text-right">
-                                                        Amount Paid
-                                                      </TableHead>
-                                                      <TableHead>
-                                                        Deal Link
-                                                      </TableHead>
-                                                    </TableRow>
-                                                  </TableHeader>
-                                                  <TableBody>
-                                                    {p.sourceCollection ? (
-                                                      <TableRow>
-                                                        <TableCell>
-                                                          {
-                                                            p.sourceCollection
-                                                              .dealId
-                                                          }
-                                                        </TableCell>
-                                                        <TableCell>
-                                                          {p.sourceCollection
-                                                            .dealName ?? "—"}
-                                                        </TableCell>
-                                                        <TableCell className="text-right">
-                                                          {formatCurrency(
-                                                            p.sourceCollection
-                                                              .amountPaid
-                                                          )}
-                                                        </TableCell>
-                                                        <TableCell>
-                                                          {p.sourceCollection
-                                                            .dealLink ? (
-                                                            <a
-                                                              href={
-                                                                p
-                                                                  .sourceCollection
-                                                                  .dealLink
-                                                              }
-                                                              target="_blank"
-                                                              rel="noreferrer"
-                                                              className="text-primary underline-offset-4 hover:underline"
-                                                            >
-                                                              Open
-                                                            </a>
-                                                          ) : (
-                                                            <span className="text-muted-foreground">
-                                                              —
-                                                            </span>
-                                                          )}
-                                                        </TableCell>
-                                                      </TableRow>
-                                                    ) : (
-                                                      <TableRow>
-                                                        <TableCell colSpan={4}>
-                                                          <span className="text-muted-foreground">
-                                                            No collection
-                                                            matched.
-                                                          </span>
-                                                        </TableCell>
-                                                      </TableRow>
-                                                    )}
-                                                  </TableBody>
-                                                </Table>
-                                              </div>
-                                            </div>
-                                          </TableCell>
-                                        </TableRow>
-                                      )}
-                                    </React.Fragment>
-                                  );
-                                })}
-                              </TableBody>
-                            </Table>
+                                        </strong>
+                                        .
+                                      </div>
+                                      <div className="rounded-md border">
+                                        <Table>
+                                          <TableHeader>
+                                            <TableRow>
+                                              <TableHead>Deal ID</TableHead>
+                                              <TableHead>Deal Name</TableHead>
+                                              <TableHead className="text-right">
+                                                Amount Paid
+                                              </TableHead>
+                                              <TableHead>Deal Link</TableHead>
+                                            </TableRow>
+                                          </TableHeader>
+                                          <TableBody>
+                                            {p.sourceCollection ? (
+                                              <TableRow>
+                                                <TableCell>
+                                                  {p.sourceCollection.dealId}
+                                                </TableCell>
+                                                <TableCell>
+                                                  {p.sourceCollection
+                                                    .dealName ?? "—"}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                  {formatCurrency(
+                                                    p.sourceCollection
+                                                      .amountPaid
+                                                  )}
+                                                </TableCell>
+                                                <TableCell>
+                                                  {p.sourceCollection
+                                                    .dealLink ? (
+                                                    <a
+                                                      href={
+                                                        p.sourceCollection
+                                                          .dealLink
+                                                      }
+                                                      target="_blank"
+                                                      rel="noreferrer"
+                                                      className="text-primary underline-offset-4 hover:underline"
+                                                    >
+                                                      Open
+                                                    </a>
+                                                  ) : (
+                                                    <span className="text-muted-foreground">
+                                                      —
+                                                    </span>
+                                                  )}
+                                                </TableCell>
+                                              </TableRow>
+                                            ) : (
+                                              <TableRow>
+                                                <TableCell colSpan={4}>
+                                                  <span className="text-muted-foreground">
+                                                    No collection matched.
+                                                  </span>
+                                                </TableCell>
+                                              </TableRow>
+                                            )}
+                                          </TableBody>
+                                        </Table>
+                                      </div>
+                                    </CardContent>
+                                  </Card>
+                                );
+                              })
+                            )}
                           </div>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )}
+                        </DialogContent>
+                      </Dialog>
+                    </TableCell>
+                  </TableRow>
                 </React.Fragment>
               ))}
             </TableBody>
