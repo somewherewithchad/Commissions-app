@@ -3,6 +3,7 @@ import {
   protectedProcedure,
   createTRPCContext,
 } from "@/server/api/trpc";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 export const accountExecutiveRouter = createTRPCRouter({
@@ -54,6 +55,7 @@ export const accountExecutiveRouter = createTRPCRouter({
       const negativeAdjustments = input.invoices.filter(
         (i) => i.amountInvoiced < 0
       );
+
       const affectedHistoricalMonths = new Set<string>();
 
       await ctx.db.$transaction(async (tx) => {
@@ -129,19 +131,22 @@ export const accountExecutiveRouter = createTRPCRouter({
         }
       });
 
-      const monthsToRecalculate = [
-        ...new Set([month, ...affectedHistoricalMonths]),
-      ];
+      // --- FINAL, CORRECT RECALCULATION LOGIC ---
       const allExecutives = await ctx.db.accountExecutive.findMany({
         select: { email: true },
       });
 
+      const monthsToUpdateSummaries = [
+        ...new Set([month, ...affectedHistoricalMonths]),
+      ];
+
       for (const executive of allExecutives) {
-        for (const m of monthsToRecalculate) {
-          // We only need to update the summaries and payouts for the directly affected months.
+        // Update summaries for the current month AND any affected historical months.
+        for (const m of monthsToUpdateSummaries) {
           await updateAccountExecutiveMonthlySummary(m, executive.email, ctx);
-          await calculateAccountExecutivePayouts(m, executive.email, ctx);
         }
+        // But only calculate the payout for the current month of the upload.
+        await calculateAccountExecutivePayouts(month, executive.email, ctx);
       }
 
       return {
@@ -162,14 +167,12 @@ const updateAccountExecutiveMonthlySummary = async (
   const collections = await ctx.db.accountExecutiveCollection.findMany({
     where: { executiveEmail, month },
   });
-
   const totalInvoiced = invoices.reduce((acc, i) => acc + i.amountInvoiced, 0);
   const totalCollections = collections.reduce(
     (acc, c) => acc + c.amountPaid,
     0
   );
   const commissionRate = collections[0]?.commissionRate ?? 0;
-
   await ctx.db.accountExecutiveMonthlySummary.upsert({
     where: { executiveEmail_month: { executiveEmail, month } },
     create: {
@@ -191,13 +194,10 @@ const calculateAccountExecutivePayouts = async (
   const summary = await ctx.db.accountExecutiveMonthlySummary.findUnique({
     where: { executiveEmail_month: { executiveEmail, month } },
   });
-
   await ctx.db.accountExecutivePayout.deleteMany({
     where: { sourceExecutiveEmail: executiveEmail, sourceSummaryMonth: month },
   });
-
   if (summary && summary.totalCollections !== 0) {
-    // Also handle negative collections
     await ctx.db.accountExecutivePayout.create({
       data: {
         amount: summary.totalCollections * summary.commissionRate,
