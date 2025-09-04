@@ -3,7 +3,6 @@ import {
   protectedProcedure,
   createTRPCContext,
 } from "@/server/api/trpc";
-import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 export const accountExecutiveRouter = createTRPCRouter({

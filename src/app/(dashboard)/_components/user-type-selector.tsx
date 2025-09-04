@@ -8,6 +8,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useLocalStorage } from "@mantine/hooks";
+import { userTypes } from "@/lib/utils";
 
 export function UserTypeSelector() {
   const [value, setValue] = useLocalStorage({
@@ -22,10 +23,11 @@ export function UserTypeSelector() {
           <SelectValue placeholder="Select form" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="recruiter">Recruiter</SelectItem>
-          <SelectItem value="recruitmentManager">
-            Recruitment Manager
-          </SelectItem>
+          {userTypes.map((type) => (
+            <SelectItem key={type} value={type}>
+              {type}
+            </SelectItem>
+          ))}
         </SelectContent>
       </Select>
     </div>
