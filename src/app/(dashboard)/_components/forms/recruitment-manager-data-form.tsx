@@ -13,7 +13,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  amountIsNumeric,
   canonicalFromToken,
   convertToYearMonth,
   extractMonthTokenFromFilename,

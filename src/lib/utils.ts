@@ -180,3 +180,11 @@ export function validateMonthAndAmount<T extends Record<string, string>>(
   }
   return true;
 }
+
+export type UserType = (typeof userTypes)[number];
+
+export const userTypes = [
+  "recruiter",
+  "recruitmentManager",
+  "accountExecutive",
+];

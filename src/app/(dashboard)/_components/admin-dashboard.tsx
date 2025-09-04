@@ -1,7 +1,7 @@
 "use client";
 
-import { RecruiterDataForm } from "@/app/(dashboard)/_components/recruiter-data-form";
-import { RecruitmentManagerDataForm } from "@/app/(dashboard)/_components/recruitment-manager-data-form";
+import { RecruiterDataForm } from "@/app/(dashboard)/_components/forms/recruiter-data-form";
+import { RecruitmentManagerDataForm } from "@/app/(dashboard)/_components/forms/recruitment-manager-data-form";
 import {
   Select,
   SelectContent,
@@ -11,14 +11,24 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { parseAsStringEnum, useQueryState } from "nuqs";
+import { userTypes, type UserType } from "@/lib/utils";
+import { AccountExecutiveDataForm } from "@/app/(dashboard)/_components/forms/account-executive-data-form";
 
 export function AdminDashboard() {
   const [form, setForm] = useQueryState(
     "form",
-    parseAsStringEnum(["recruiter", "recruitmentManager"]).withDefault(
-      "recruiter"
-    )
+    parseAsStringEnum(userTypes).withDefault("recruiter")
   );
+
+  const renderForm = (form: UserType) => {
+    if (form === "recruiter") {
+      return <RecruiterDataForm />;
+    }
+    if (form === "recruitmentManager") {
+      return <RecruitmentManagerDataForm />;
+    }
+    return <AccountExecutiveDataForm />;
+  };
 
   return (
     <div className="space-y-6">
@@ -26,27 +36,22 @@ export function AdminDashboard() {
         <Label htmlFor="form-select">Form</Label>
         <Select
           value={form}
-          onValueChange={(value) =>
-            setForm(value as "recruiter" | "recruitmentManager")
-          }
+          onValueChange={(value) => setForm(value as UserType)}
         >
           <SelectTrigger id="form-select" aria-label="Select form">
             <SelectValue placeholder="Select form" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="recruiter">Recruiter</SelectItem>
-            <SelectItem value="recruitmentManager">
-              Recruitment Manager
-            </SelectItem>
+            {userTypes.map((type) => (
+              <SelectItem key={type} value={type}>
+                {type}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
 
-      {form === "recruiter" ? (
-        <RecruiterDataForm />
-      ) : (
-        <RecruitmentManagerDataForm />
-      )}
+      {renderForm(form)}
     </div>
   );
 }
