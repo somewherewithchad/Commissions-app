@@ -3,8 +3,6 @@ import {
   protectedProcedure,
   createTRPCContext,
 } from "@/server/api/trpc";
-import { Prisma } from "@prisma/client";
-import { addMonths, format, parse } from "date-fns";
 import { z } from "zod";
 
 export const accountExecutiveRouter = createTRPCRouter({
@@ -35,7 +33,116 @@ export const accountExecutiveRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      console.log("=============> ", input);
+      const allMonths = new Set([
+        ...input.invoices.map((i) => i.month),
+        ...input.collections.map((c) => c.month),
+      ]);
+      if (allMonths.size > 1) {
+        throw new Error(
+          "Data for multiple months was found in a single upload. Please upload data for one month at a time."
+        );
+      }
+
+      const month = allMonths.values().next().value;
+      if (!month) {
+        return { success: true, message: "No data to process." };
+      }
+
+      const positiveInvoices = input.invoices.filter(
+        (i) => i.amountInvoiced >= 0
+      );
+      const negativeAdjustments = input.invoices.filter(
+        (i) => i.amountInvoiced < 0
+      );
+      const affectedHistoricalMonths = new Set<string>();
+
+      await ctx.db.$transaction(async (tx) => {
+        await tx.accountExecutiveInvoice.deleteMany({
+          where: { month: month },
+        });
+        await tx.accountExecutiveCollection.deleteMany({
+          where: { month: month },
+        });
+
+        const emailToNameMap = new Map<string, string>();
+        input.invoices.forEach((i) =>
+          emailToNameMap.set(i.executiveEmail, i.executiveName)
+        );
+        input.collections.forEach((c) =>
+          emailToNameMap.set(c.executiveEmail, c.executiveName)
+        );
+        await Promise.all(
+          Array.from(emailToNameMap.entries()).map(([email, name]) =>
+            tx.accountExecutive.upsert({
+              where: { email },
+              create: { email, name },
+              update: { name },
+            })
+          )
+        );
+
+        if (positiveInvoices.length > 0) {
+          await tx.accountExecutiveInvoice.createMany({
+            data: positiveInvoices.map((invoice) => ({
+              dealId: invoice.dealId,
+              dealLink: invoice.dealLink,
+              dealName: invoice.dealName,
+              amountInvoiced: invoice.amountInvoiced,
+              month: invoice.month,
+              executiveEmail: invoice.executiveEmail,
+            })),
+          });
+        }
+        if (input.collections.length > 0) {
+          await tx.accountExecutiveCollection.createMany({
+            data: input.collections.map((collection) => ({
+              amountPaid: collection.amountPaid,
+              month: collection.month,
+              dealId: collection.dealId,
+              executiveEmail: collection.executiveEmail,
+              commissionRate: collection.commissionRate,
+            })),
+          });
+        }
+
+        for (const adjustment of negativeAdjustments) {
+          const originalInvoice = await tx.accountExecutiveInvoice.findUnique({
+            where: { dealId: adjustment.dealId },
+            select: { month: true },
+          });
+
+          if (originalInvoice) {
+            affectedHistoricalMonths.add(originalInvoice.month);
+            await tx.accountExecutiveInvoice.update({
+              where: { dealId: adjustment.dealId },
+              data: {
+                amountInvoiced: {
+                  decrement: Math.abs(adjustment.amountInvoiced),
+                },
+              },
+            });
+          } else {
+            throw new Error(
+              `Adjustment failed: The original deal with ID "${adjustment.dealId}" was not found.`
+            );
+          }
+        }
+      });
+
+      const monthsToRecalculate = [
+        ...new Set([month, ...affectedHistoricalMonths]),
+      ];
+      const allExecutives = await ctx.db.accountExecutive.findMany({
+        select: { email: true },
+      });
+
+      for (const executive of allExecutives) {
+        for (const m of monthsToRecalculate) {
+          // We only need to update the summaries and payouts for the directly affected months.
+          await updateAccountExecutiveMonthlySummary(m, executive.email, ctx);
+          await calculateAccountExecutivePayouts(m, executive.email, ctx);
+        }
+      }
 
       return {
         success: true,
@@ -43,3 +150,62 @@ export const accountExecutiveRouter = createTRPCRouter({
       };
     }),
 });
+
+const updateAccountExecutiveMonthlySummary = async (
+  month: string,
+  executiveEmail: string,
+  ctx: Awaited<ReturnType<typeof createTRPCContext>>
+) => {
+  const invoices = await ctx.db.accountExecutiveInvoice.findMany({
+    where: { executiveEmail, month },
+  });
+  const collections = await ctx.db.accountExecutiveCollection.findMany({
+    where: { executiveEmail, month },
+  });
+
+  const totalInvoiced = invoices.reduce((acc, i) => acc + i.amountInvoiced, 0);
+  const totalCollections = collections.reduce(
+    (acc, c) => acc + c.amountPaid,
+    0
+  );
+  const commissionRate = collections[0]?.commissionRate ?? 0;
+
+  await ctx.db.accountExecutiveMonthlySummary.upsert({
+    where: { executiveEmail_month: { executiveEmail, month } },
+    create: {
+      month,
+      executiveEmail,
+      totalInvoiced,
+      totalCollections,
+      commissionRate,
+    },
+    update: { totalInvoiced, totalCollections, commissionRate },
+  });
+};
+
+const calculateAccountExecutivePayouts = async (
+  month: string,
+  executiveEmail: string,
+  ctx: Awaited<ReturnType<typeof createTRPCContext>>
+) => {
+  const summary = await ctx.db.accountExecutiveMonthlySummary.findUnique({
+    where: { executiveEmail_month: { executiveEmail, month } },
+  });
+
+  await ctx.db.accountExecutivePayout.deleteMany({
+    where: { sourceExecutiveEmail: executiveEmail, sourceSummaryMonth: month },
+  });
+
+  if (summary && summary.totalCollections !== 0) {
+    // Also handle negative collections
+    await ctx.db.accountExecutivePayout.create({
+      data: {
+        amount: summary.totalCollections * summary.commissionRate,
+        commissionRate: summary.commissionRate,
+        payoutMonth: month,
+        sourceSummaryMonth: month,
+        sourceExecutiveEmail: executiveEmail,
+      },
+    });
+  }
+};

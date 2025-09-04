@@ -28,6 +28,7 @@ model User {
   // A User can have one Recruiter profile associated with them.
   recruiterProfile          Recruiter?
   recruitmentManagerProfile RecruitmentManager?
+  accountExecutiveProfile   AccountExecutive?
 
   @@unique([email])
   @@map("user")
@@ -155,6 +156,67 @@ model RecruitmentManagerPayout {
   sourceManagerEmail String
 
   manager RecruitmentManager @relation(fields: [sourceManagerEmail], references: [email])
+}
+
+model AccountExecutive {
+  id    String @id @default(cuid())
+  name  String
+  email String @unique
+
+  user   User?   @relation(fields: [userId], references: [id])
+  userId String? @unique
+
+  invoices         AccountExecutiveInvoice[]
+  collections      AccountExecutiveCollection[]
+  monthlySummaries AccountExecutiveMonthlySummary[]
+  payouts          AccountExecutivePayout[]
+}
+
+model AccountExecutiveInvoice {
+  id             String  @id @default(cuid())
+  dealId         String  @unique
+  dealLink       String?
+  dealName       String
+  amountInvoiced Float
+  month          String
+
+  executive      AccountExecutive @relation(fields: [executiveEmail], references: [email])
+  executiveEmail String
+}
+
+model AccountExecutiveCollection {
+  id             String @id @default(cuid())
+  amountPaid     Float
+  month          String
+  dealId         String
+  commissionRate Float // The rate is stored with the collection data
+
+  executive      AccountExecutive @relation(fields: [executiveEmail], references: [email])
+  executiveEmail String
+}
+
+model AccountExecutiveMonthlySummary {
+  id               String @id @default(cuid())
+  month            String
+  totalInvoiced    Float
+  totalCollections Float
+  commissionRate   Float // Storing the rate for the month simplifies payout calculation
+
+  executive      AccountExecutive @relation(fields: [executiveEmail], references: [email])
+  executiveEmail String
+
+  @@unique([executiveEmail, month])
+}
+
+model AccountExecutivePayout {
+  id                   String @id @default(cuid())
+  amount               Float
+  commissionRate       Float
+  payoutMonth          String
+  sourceSummaryMonth   String
+  sourceExecutiveEmail String
+
+  executive AccountExecutive @relation(fields: [sourceExecutiveEmail], references: [email])
 }
 
 model Session {
