@@ -65,10 +65,87 @@ export function AccountExecutiveDataForm() {
     currentToken: string | null,
     otherToken: string | null
   ) {
+    if (
+      currentToken &&
+      otherToken &&
+      currentToken.toLowerCase() !== otherToken.toLowerCase()
+    ) {
+      toast.error(
+        `Files must be for the same month. Selected ${which} is ${currentToken}, other is ${otherToken}`
+      );
+      if (which === "invoice") {
+        setInvoicesFile(null);
+        setInvoicesMonthToken(null);
+        if (invoicesInputRef.current) invoicesInputRef.current.value = "";
+      } else {
+        setCollectionsFile(null);
+        setCollectionsMonthToken(null);
+        if (collectionsInputRef.current) collectionsInputRef.current.value = "";
+      }
+      return false;
+    }
     return true;
   }
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {}
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!invoicesFile || !collectionsFile) {
+      toast.error("Please select both Invoices and Collections CSV files.");
+      return;
+    }
+
+    const dealsToken =
+      invoicesMonthToken ??
+      extractMonthTokenFromFilename(invoicesFile, "invoice");
+    if (!dealsToken) return;
+    const cashToken =
+      collectionsMonthToken ??
+      extractMonthTokenFromFilename(collectionsFile, "collection");
+    if (!cashToken) return;
+    if (dealsToken.toLowerCase() !== cashToken.toLowerCase()) {
+      toast.error(
+        `Files must be for the same month. Deals is ${dealsToken}, Cash is ${cashToken}`
+      );
+      return;
+    }
+
+    const canonicalMonth = canonicalFromToken(dealsToken);
+
+    try {
+      const [invoiceRows, collectionRows] = await Promise.all([
+        parseCsv<InvoiceCSV>(invoicesFile, invoicesCsvRequiredHeaders),
+        parseCsv<CollectionCSV>(collectionsFile, collectionsCsvRequiredHeaders),
+      ]);
+
+      if (
+        !validateMonthAndAmount(
+          invoiceRows,
+          "Month",
+          "Amount invoiced",
+          canonicalMonth,
+          "Invoices CSV"
+        )
+      ) {
+        return;
+      }
+
+      if (
+        !validateMonthAndAmount(
+          collectionRows,
+          "Month",
+          "Amount paid",
+          canonicalMonth,
+          "Collections CSV"
+        )
+      ) {
+        return;
+      }
+
+      // add monthly data mutation comes here later
+    } catch (err) {
+      console.error(err);
+    }
+  }
 
   return (
     <div className="max-w-2xl">
