@@ -36,7 +36,7 @@ const invoicesCsvRequiredHeaders = [
 const collectionsCsvRequiredHeaders = [
   "Deal ID",
   "Recruitment Manager Name",
-  "Recruiter Email",
+  "Recruitment Manager Email",
   "Amount paid",
   "Month",
 ] as const;
@@ -169,7 +169,7 @@ export function RecruitmentManagerDataForm() {
         collections: collectionRows.map((collection) => ({
           dealId: collection["Deal ID"],
           managerName: collection["Recruitment Manager Name"],
-          managerEmail: collection["Recruiter Email"].toLowerCase(),
+          managerEmail: collection["Recruitment Manager Email"].toLowerCase(),
           amountPaid: Number(collection["Amount paid"].replace(/,/g, "")),
           month: convertToYearMonth(canonicalMonth),
         })),
