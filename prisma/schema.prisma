@@ -197,7 +197,7 @@ model AccountExecutiveCollection {
   amountPaid     Float
   month          String
   dealId         String
-  commissionRate Float // The rate is stored with the collection data
+  commissionRate Float
 
   executive      AccountExecutive @relation(fields: [executiveEmail], references: [email])
   executiveEmail String

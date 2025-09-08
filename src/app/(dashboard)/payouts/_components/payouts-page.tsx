@@ -11,7 +11,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { cn, userTypes, type UserType } from "@/lib/utils";
+import { cn, userTypes, userTypeToLabel, type UserType } from "@/lib/utils";
 import { RecruiterPayouts } from "@/app/(dashboard)/payouts/_components/recruiter-payouts";
 import {
   Select,
@@ -78,7 +78,7 @@ export function PayoutsPage() {
               <SelectContent>
                 {userTypes.map((type) => (
                   <SelectItem key={type} value={type}>
-                    {type}
+                    {userTypeToLabel(type)}
                   </SelectItem>
                 ))}
               </SelectContent>

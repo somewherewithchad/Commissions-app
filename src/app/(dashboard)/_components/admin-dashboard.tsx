@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { parseAsStringEnum, useQueryState } from "nuqs";
-import { userTypes, type UserType } from "@/lib/utils";
+import { userTypes, userTypeToLabel, type UserType } from "@/lib/utils";
 import { AccountExecutiveDataForm } from "@/app/(dashboard)/_components/forms/account-executive-data-form";
 
 export function AdminDashboard() {
@@ -44,7 +44,7 @@ export function AdminDashboard() {
           <SelectContent>
             {userTypes.map((type) => (
               <SelectItem key={type} value={type}>
-                {type}
+                {userTypeToLabel(type)}
               </SelectItem>
             ))}
           </SelectContent>

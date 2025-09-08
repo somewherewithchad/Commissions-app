@@ -8,7 +8,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useLocalStorage } from "@mantine/hooks";
-import { userTypes } from "@/lib/utils";
+import { userTypes, userTypeToLabel } from "@/lib/utils";
 
 export function UserTypeSelector() {
   const [value, setValue] = useLocalStorage({
@@ -25,7 +25,7 @@ export function UserTypeSelector() {
         <SelectContent>
           {userTypes.map((type) => (
             <SelectItem key={type} value={type}>
-              {type}
+              {userTypeToLabel(type)}
             </SelectItem>
           ))}
         </SelectContent>
