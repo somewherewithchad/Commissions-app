@@ -419,15 +419,7 @@ export const recruiterRouter = createTRPCRouter({
               },
             });
           } catch (error) {
-            if (
-              error instanceof Prisma.PrismaClientKnownRequestError &&
-              error.code === "P2025"
-            ) {
-              throw new Error(
-                `Adjustment failed: The original deal with ID "${adjustment.dealId}" was not found.`
-              );
-            }
-            throw error;
+            continue;
           }
         }
       });

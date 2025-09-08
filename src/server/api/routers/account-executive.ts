@@ -368,9 +368,7 @@ export const accountExecutiveRouter = createTRPCRouter({
               },
             });
           } else {
-            throw new Error(
-              `Adjustment failed: The original deal with ID "${adjustment.dealId}" was not found.`
-            );
+            continue;
           }
         }
       });
