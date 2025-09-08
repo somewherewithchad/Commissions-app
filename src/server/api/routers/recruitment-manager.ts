@@ -2,6 +2,7 @@ import {
   createTRPCRouter,
   protectedProcedure,
   createTRPCContext,
+  adminProcedure,
 } from "@/server/api/trpc";
 import { Prisma } from "@prisma/client";
 import { addMonths, format, parse } from "date-fns";
@@ -9,6 +10,31 @@ import { z } from "zod";
 
 export const recruitmentManagerRouter = createTRPCRouter({
   // Queries
+  getAllRecruiterManagers: adminProcedure
+    .input(
+      z.object({
+        page: z.number(),
+        perPage: z.number(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const total = await ctx.db.recruitmentManager.count();
+
+      const pageCount = Math.ceil(total / input.perPage);
+
+      const items = await ctx.db.recruitmentManager.findMany({
+        take: input.perPage,
+        skip: (input.page - 1) * input.perPage,
+        include: {
+          user: true,
+        },
+      });
+
+      return {
+        items,
+        pageCount,
+      };
+    }),
   getManagerData: protectedProcedure
     .input(z.object({ year: z.string().regex(/^\d{4}$/) }))
     .query(async ({ ctx, input }) => {

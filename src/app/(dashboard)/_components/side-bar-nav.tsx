@@ -24,6 +24,11 @@ export function SideBarNav({ user }: { user?: User }) {
         href: "/payouts",
         icon: Icons.dollarSign,
       },
+      {
+        title: "Users",
+        href: "/users",
+        icon: Icons.users,
+      },
     ];
   } else {
     navigationItems = [

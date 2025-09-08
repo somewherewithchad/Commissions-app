@@ -43,24 +43,23 @@ export const auth = betterAuth({
             message: "Email is required",
           });
         }
-        const [recruiter, recruitmentManager, accountExecutive] =
-          await Promise.all([
-            db.recruiter.findUnique({
-              where: {
-                email: email,
-              },
-            }),
-            db.recruitmentManager.findUnique({
-              where: {
-                email: email,
-              },
-            }),
-            db.accountExecutive.findUnique({
-              where: {
-                email: email,
-              },
-            }),
-          ]);
+        const [recruiter, recruitmentManager] = await Promise.all([
+          db.recruiter.findUnique({
+            where: {
+              email: email,
+            },
+          }),
+          db.recruitmentManager.findUnique({
+            where: {
+              email: email,
+            },
+          }),
+          db.accountExecutive.findUnique({
+            where: {
+              email: email,
+            },
+          }),
+        ]);
 
         if (recruiter) {
           await db.recruiter.update({
@@ -100,31 +99,6 @@ export const auth = betterAuth({
           });
         } else {
           await db.recruitmentManager.create({
-            data: {
-              name: ctx.context.newSession?.user.name ?? "",
-              email: email,
-              user: {
-                connect: {
-                  id: ctx.context.newSession?.user.id,
-                },
-              },
-            },
-          });
-        }
-
-        if (accountExecutive) {
-          await db.accountExecutive.update({
-            where: { id: accountExecutive.id },
-            data: {
-              user: {
-                connect: {
-                  id: ctx.context.newSession?.user.id,
-                },
-              },
-            },
-          });
-        } else {
-          await db.accountExecutive.create({
             data: {
               name: ctx.context.newSession?.user.name ?? "",
               email: email,

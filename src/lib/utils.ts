@@ -188,3 +188,10 @@ export const userTypes = [
   "recruitmentManager",
   "accountExecutive",
 ];
+
+export function userTypeToLabel(type: string) {
+  if (type === "recruiter") return "Recruiter";
+  if (type === "recruitmentManager") return "Recruitment Manager";
+  if (type === "accountExecutive") return "Account Executive";
+  return type;
+}

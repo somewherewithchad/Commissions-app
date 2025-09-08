@@ -8,6 +8,7 @@ import {
   TrendingUp,
   LogOut,
   ChevronsUpDown,
+  MoreHorizontal,
 } from "lucide-react";
 
 export const Icons = {
@@ -19,6 +20,7 @@ export const Icons = {
   dollarSign: DollarSign,
   settings: Settings,
   trendingUp: TrendingUp,
+  moreHorizontal: MoreHorizontal,
   google: (props: LucideProps) => (
     <svg
       viewBox="0 0 256 262"
