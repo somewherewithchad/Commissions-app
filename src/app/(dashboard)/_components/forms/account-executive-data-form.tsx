@@ -39,7 +39,6 @@ const collectionsCsvRequiredHeaders = [
   "Account Executive Email",
   "Amount paid",
   "Month",
-  "% commission",
 ] as const;
 
 type InvoiceCSV = Record<(typeof invoicesCsvRequiredHeaders)[number], string>;
@@ -173,7 +172,6 @@ export function AccountExecutiveDataForm() {
           executiveEmail: collection["Account Executive Email"].toLowerCase(),
           amountPaid: Number(collection["Amount paid"].replace(/,/g, "")),
           month: convertToYearMonth(canonicalMonth),
-          commissionRate: Number(collection["% commission"]),
         })),
       });
     } catch (err) {
