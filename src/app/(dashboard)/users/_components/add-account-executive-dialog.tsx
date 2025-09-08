@@ -35,45 +35,82 @@ export const formSchema = z
         required_error: "Base commission rate is required",
       })
       .min(0.01, "Base commission rate must be greater than 0"),
-    tier1CommissionRate: z.coerce
-      .number({
-        invalid_type_error: "Tier 1 commission rate must be a number",
-        required_error: "Tier 1 commission rate is required",
-      })
-      .min(0.01, "Tier 1 commission rate must be greater than 0"),
-    tier1CashCollectedThreshold: z.coerce
-      .number({
-        invalid_type_error: "Tier 1 cash collected threshold must be a number",
-        required_error: "Tier 1 cash collected threshold is required",
-      })
-      .min(1, "Tier 1 cash collected threshold must be greater than 0"),
-    tier2CommissionRate: z.coerce
-      .number({
-        invalid_type_error: "Tier 2 commission rate must be a number",
-        required_error: "Tier 2 commission rate is required",
-      })
-      .min(0.01, "Tier 2 commission rate must be greater than 0"),
-    tier2CashCollectedThreshold: z.coerce
-      .number({
-        invalid_type_error: "Tier 2 cash collected threshold must be a number",
-        required_error: "Tier 2 cash collected threshold is required",
-      })
-      .min(1, "Tier 2 cash collected threshold must be greater than 0"),
-    tier3CommissionRate: z.coerce
-      .number({
-        invalid_type_error: "Tier 3 commission rate must be a number",
-        required_error: "Tier 3 commission rate is required",
-      })
-      .min(0.01, "Tier 3 commission rate must be greater than 0"),
-    tier3CashCollectedThreshold: z.coerce
-      .number({
-        invalid_type_error: "Tier 3 cash collected threshold must be a number",
-        required_error: "Tier 3 cash collected threshold is required",
-      })
-      .min(1, "Tier 3 cash collected threshold must be greater than 0"),
+    tier1CommissionRate: z.coerce.number({
+      invalid_type_error: "Tier 1 commission rate must be a number",
+      required_error: "Tier 1 commission rate is required",
+    }),
+    tier1CashCollectedThreshold: z.coerce.number({
+      invalid_type_error: "Tier 1 cash collected threshold must be a number",
+      required_error: "Tier 1 cash collected threshold is required",
+    }),
+    tier2CommissionRate: z.coerce.number({
+      invalid_type_error: "Tier 2 commission rate must be a number",
+      required_error: "Tier 2 commission rate is required",
+    }),
+    tier2CashCollectedThreshold: z.coerce.number({
+      invalid_type_error: "Tier 2 cash collected threshold must be a number",
+      required_error: "Tier 2 cash collected threshold is required",
+    }),
+    tier3CommissionRate: z.coerce.number({
+      invalid_type_error: "Tier 3 commission rate must be a number",
+      required_error: "Tier 3 commission rate is required",
+    }),
+    tier3CashCollectedThreshold: z.coerce.number({
+      invalid_type_error: "Tier 3 cash collected threshold must be a number",
+      required_error: "Tier 3 cash collected threshold is required",
+    }),
     tierSystemEnabled: z.boolean(),
   })
   .superRefine((data, ctx) => {
+    // When tier system is disabled, skip tier validations entirely
+    if (!data.tierSystemEnabled) {
+      return;
+    }
+
+    // When enabled, enforce minimums for tiers
+    if (data.tier1CommissionRate < 0.01) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["tier1CommissionRate"],
+        message: "Tier 1 commission rate must be greater than 0",
+      });
+    }
+    if (data.tier2CommissionRate < 0.01) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["tier2CommissionRate"],
+        message: "Tier 2 commission rate must be greater than 0",
+      });
+    }
+    if (data.tier3CommissionRate < 0.01) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["tier3CommissionRate"],
+        message: "Tier 3 commission rate must be greater than 0",
+      });
+    }
+    if (data.tier1CashCollectedThreshold < 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["tier1CashCollectedThreshold"],
+        message: "Tier 1 cash collected threshold must be greater than 0",
+      });
+    }
+    if (data.tier2CashCollectedThreshold < 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["tier2CashCollectedThreshold"],
+        message: "Tier 2 cash collected threshold must be greater than 0",
+      });
+    }
+    if (data.tier3CashCollectedThreshold < 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["tier3CashCollectedThreshold"],
+        message: "Tier 3 cash collected threshold must be greater than 0",
+      });
+    }
+
     // Base rate must be strictly less than Tier 1 rate
     if (data.baseCommissionRate >= data.tier1CommissionRate) {
       ctx.addIssue({
@@ -137,13 +174,13 @@ export function AddAccountExecutiveDialog() {
     defaultValues: {
       name: "",
       email: "",
-      baseCommissionRate: 0.01,
-      tier1CommissionRate: 0.01,
-      tier1CashCollectedThreshold: 0,
-      tier2CommissionRate: 0.01,
-      tier2CashCollectedThreshold: 0,
-      tier3CommissionRate: 0.01,
-      tier3CashCollectedThreshold: 0,
+      baseCommissionRate: 1,
+      tier1CommissionRate: 2,
+      tier1CashCollectedThreshold: 10000,
+      tier2CommissionRate: 3,
+      tier2CashCollectedThreshold: 20000,
+      tier3CommissionRate: 4,
+      tier3CashCollectedThreshold: 30000,
       tierSystemEnabled: true,
     },
   });
