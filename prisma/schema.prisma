@@ -166,6 +166,14 @@ model AccountExecutive {
   user   User?   @relation(fields: [userId], references: [id])
   userId String? @unique
 
+  baseCommissionRate          Float
+  tier1CommissionRate         Float
+  tier1CashCollectedThreshold Float
+  tier2CommissionRate         Float
+  tier2CashCollectedThreshold Float
+  tier3CommissionRate         Float
+  tier3CashCollectedThreshold Float
+
   invoices         AccountExecutiveInvoice[]
   collections      AccountExecutiveCollection[]
   monthlySummaries AccountExecutiveMonthlySummary[]

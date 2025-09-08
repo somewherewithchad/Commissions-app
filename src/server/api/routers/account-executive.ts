@@ -172,7 +172,6 @@ export const accountExecutiveRouter = createTRPCRouter({
             executiveEmail: z.string().email(),
             amountPaid: z.number(),
             month: z.string().regex(/^\d{4}-\d{2}$/),
-            commissionRate: z.number(),
           })
         ),
       })
@@ -210,22 +209,28 @@ export const accountExecutiveRouter = createTRPCRouter({
           where: { month: month },
         });
 
-        const emailToNameMap = new Map<string, string>();
-        input.invoices.forEach((i) =>
-          emailToNameMap.set(i.executiveEmail, i.executiveName)
+        // Validate that all referenced executives exist
+        const referencedEmails = Array.from(
+          new Set([
+            ...input.invoices.map((i) => i.executiveEmail),
+            ...input.collections.map((c) => c.executiveEmail),
+          ])
         );
-        input.collections.forEach((c) =>
-          emailToNameMap.set(c.executiveEmail, c.executiveName)
-        );
-        await Promise.all(
-          Array.from(emailToNameMap.entries()).map(([email, name]) =>
-            tx.accountExecutive.upsert({
-              where: { email },
-              create: { email, name },
-              update: { name },
-            })
-          )
-        );
+        if (referencedEmails.length > 0) {
+          const existing = await tx.accountExecutive.findMany({
+            where: { email: { in: referencedEmails } },
+            select: { email: true },
+          });
+          const existingSet = new Set(existing.map((e) => e.email));
+          const missing = referencedEmails.filter((e) => !existingSet.has(e));
+          if (missing.length > 0) {
+            throw new Error(
+              `Unknown account executives for this upload: ${missing.join(
+                ", "
+              )}`
+            );
+          }
+        }
 
         if (positiveInvoices.length > 0) {
           await tx.accountExecutiveInvoice.createMany({
@@ -240,13 +245,78 @@ export const accountExecutiveRouter = createTRPCRouter({
           });
         }
         if (input.collections.length > 0) {
+          // Compute per-executive commission rate for this month using tier thresholds
+          const totalsByExecutiveEmail = new Map<string, number>();
+          for (const c of input.collections) {
+            const current = totalsByExecutiveEmail.get(c.executiveEmail) ?? 0;
+            totalsByExecutiveEmail.set(
+              c.executiveEmail,
+              current + c.amountPaid
+            );
+          }
+
+          const uniqueEmails = Array.from(totalsByExecutiveEmail.keys());
+          const executives = await tx.accountExecutive.findMany({
+            where: { email: { in: uniqueEmails } },
+            select: {
+              email: true,
+              baseCommissionRate: true,
+              tier1CommissionRate: true,
+              tier1CashCollectedThreshold: true,
+              tier2CommissionRate: true,
+              tier2CashCollectedThreshold: true,
+              tier3CommissionRate: true,
+              tier3CashCollectedThreshold: true,
+            },
+          });
+
+          const emailToExecutive = new Map(executives.map((e) => [e.email, e]));
+
+          const computeRate = (
+            total: number,
+            exec: (typeof executives)[number]
+          ) => {
+            let rate = exec.baseCommissionRate ?? 0;
+            if (
+              exec.tier1CashCollectedThreshold !== undefined &&
+              total >= exec.tier1CashCollectedThreshold
+            ) {
+              rate = exec.tier1CommissionRate ?? rate;
+            }
+            if (
+              exec.tier2CashCollectedThreshold !== undefined &&
+              total >= exec.tier2CashCollectedThreshold
+            ) {
+              rate = exec.tier2CommissionRate ?? rate;
+            }
+            if (
+              exec.tier3CashCollectedThreshold !== undefined &&
+              total >= exec.tier3CashCollectedThreshold
+            ) {
+              rate = exec.tier3CommissionRate ?? rate;
+            }
+            return rate;
+          };
+
+          const emailToComputedRate = new Map<string, number>();
+          for (const email of uniqueEmails) {
+            const exec = emailToExecutive.get(email);
+            const total = totalsByExecutiveEmail.get(email) ?? 0;
+            if (exec) {
+              emailToComputedRate.set(email, computeRate(total, exec));
+            } else {
+              emailToComputedRate.set(email, 0);
+            }
+          }
+
           await tx.accountExecutiveCollection.createMany({
             data: input.collections.map((collection) => ({
               amountPaid: collection.amountPaid,
               month: collection.month,
               dealId: collection.dealId,
               executiveEmail: collection.executiveEmail,
-              commissionRate: collection.commissionRate / 100,
+              commissionRate:
+                emailToComputedRate.get(collection.executiveEmail) ?? 0,
             })),
           });
         }
@@ -316,7 +386,41 @@ const updateAccountExecutiveMonthlySummary = async (
     (acc, c) => acc + c.amountPaid,
     0
   );
-  const commissionRate = collections[0]?.commissionRate ?? 0;
+  // Compute commission rate at runtime from AccountExecutive tier settings
+  const exec = await ctx.db.accountExecutive.findUnique({
+    where: { email: executiveEmail },
+    select: {
+      baseCommissionRate: true,
+      tier1CommissionRate: true,
+      tier1CashCollectedThreshold: true,
+      tier2CommissionRate: true,
+      tier2CashCollectedThreshold: true,
+      tier3CommissionRate: true,
+      tier3CashCollectedThreshold: true,
+    },
+  });
+  let commissionRate = 0;
+  if (exec) {
+    commissionRate = exec.baseCommissionRate ?? 0;
+    if (
+      exec.tier1CashCollectedThreshold !== undefined &&
+      totalCollections >= exec.tier1CashCollectedThreshold
+    ) {
+      commissionRate = exec.tier1CommissionRate ?? commissionRate;
+    }
+    if (
+      exec.tier2CashCollectedThreshold !== undefined &&
+      totalCollections >= exec.tier2CashCollectedThreshold
+    ) {
+      commissionRate = exec.tier2CommissionRate ?? commissionRate;
+    }
+    if (
+      exec.tier3CashCollectedThreshold !== undefined &&
+      totalCollections >= exec.tier3CashCollectedThreshold
+    ) {
+      commissionRate = exec.tier3CommissionRate ?? commissionRate;
+    }
+  }
   await ctx.db.accountExecutiveMonthlySummary.upsert({
     where: { executiveEmail_month: { executiveEmail, month } },
     create: {
