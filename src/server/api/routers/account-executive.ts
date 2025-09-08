@@ -293,6 +293,7 @@ export const accountExecutiveRouter = createTRPCRouter({
               tier2CashCollectedThreshold: true,
               tier3CommissionRate: true,
               tier3CashCollectedThreshold: true,
+              tierSystemEnabled: true,
             },
           });
 
@@ -303,6 +304,9 @@ export const accountExecutiveRouter = createTRPCRouter({
             exec: (typeof executives)[number]
           ) => {
             let rate = exec.baseCommissionRate ?? 0;
+            if (!exec.tierSystemEnabled) {
+              return rate;
+            }
             if (
               exec.tier1CashCollectedThreshold !== undefined &&
               total >= exec.tier1CashCollectedThreshold
@@ -500,28 +504,31 @@ const updateAccountExecutiveMonthlySummary = async (
       tier2CashCollectedThreshold: true,
       tier3CommissionRate: true,
       tier3CashCollectedThreshold: true,
+      tierSystemEnabled: true,
     },
   });
   let commissionRate = 0;
   if (exec) {
     commissionRate = exec.baseCommissionRate ?? 0;
-    if (
-      exec.tier1CashCollectedThreshold !== undefined &&
-      totalCollections >= exec.tier1CashCollectedThreshold
-    ) {
-      commissionRate = exec.tier1CommissionRate ?? commissionRate;
-    }
-    if (
-      exec.tier2CashCollectedThreshold !== undefined &&
-      totalCollections >= exec.tier2CashCollectedThreshold
-    ) {
-      commissionRate = exec.tier2CommissionRate ?? commissionRate;
-    }
-    if (
-      exec.tier3CashCollectedThreshold !== undefined &&
-      totalCollections >= exec.tier3CashCollectedThreshold
-    ) {
-      commissionRate = exec.tier3CommissionRate ?? commissionRate;
+    if (exec.tierSystemEnabled) {
+      if (
+        exec.tier1CashCollectedThreshold !== undefined &&
+        totalCollections >= exec.tier1CashCollectedThreshold
+      ) {
+        commissionRate = exec.tier1CommissionRate ?? commissionRate;
+      }
+      if (
+        exec.tier2CashCollectedThreshold !== undefined &&
+        totalCollections >= exec.tier2CashCollectedThreshold
+      ) {
+        commissionRate = exec.tier2CommissionRate ?? commissionRate;
+      }
+      if (
+        exec.tier3CashCollectedThreshold !== undefined &&
+        totalCollections >= exec.tier3CashCollectedThreshold
+      ) {
+        commissionRate = exec.tier3CommissionRate ?? commissionRate;
+      }
     }
   }
   await ctx.db.accountExecutiveMonthlySummary.upsert({
