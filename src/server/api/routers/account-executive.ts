@@ -2,11 +2,37 @@ import {
   createTRPCRouter,
   protectedProcedure,
   createTRPCContext,
+  adminProcedure,
 } from "@/server/api/trpc";
 import { z } from "zod";
 
 export const accountExecutiveRouter = createTRPCRouter({
   // Queries
+  getAllAccountExecutives: adminProcedure
+    .input(
+      z.object({
+        page: z.number(),
+        perPage: z.number(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const total = await ctx.db.accountExecutive.count();
+
+      const pageCount = Math.ceil(total / input.perPage);
+
+      const items = await ctx.db.accountExecutive.findMany({
+        take: input.perPage,
+        skip: (input.page - 1) * input.perPage,
+        include: {
+          user: true,
+        },
+      });
+
+      return {
+        items,
+        pageCount,
+      };
+    }),
   getExecutiveData: protectedProcedure
     .input(z.object({ year: z.string().regex(/^\d{4}$/) }))
     .query(async ({ ctx, input }) => {

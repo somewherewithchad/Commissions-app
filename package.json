@@ -19,6 +19,7 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@hookform/resolvers": "^5.2.1",
 		"@mantine/hooks": "^8.2.8",
 		"@prisma/client": "^6.14.0",
 		"@radix-ui/react-avatar": "^1.1.10",
@@ -50,11 +51,12 @@
 		"react": "^19.1.1",
 		"react-day-picker": "^9.9.0",
 		"react-dom": "^19.1.1",
+		"react-hook-form": "^7.62.0",
 		"server-only": "^0.0.1",
 		"sonner": "^2.0.7",
 		"superjson": "^2.2.2",
 		"tailwind-merge": "^3.3.1",
-		"zod": "^4.0.17"
+		"zod": "3.25.76"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "1.9.4",

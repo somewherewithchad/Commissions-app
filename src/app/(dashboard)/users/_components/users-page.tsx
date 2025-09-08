@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation";
 import { RecruitersTable } from "@/app/(dashboard)/users/_components/recruiters-table";
 import { parseAsString, useQueryState } from "nuqs";
 import { RecruiterManagerTable } from "@/app/(dashboard)/users/_components/recruiter-manager-table";
+import { AccountExecutiveTable } from "@/app/(dashboard)/users/_components/account-executive-table";
 
 export function UsersPage() {
   const router = useRouter();
@@ -39,6 +40,7 @@ export function UsersPage() {
       <div className="data-table-container">
         {type === "recruiter" && <RecruitersTable />}
         {type === "recruitmentManager" && <RecruiterManagerTable />}
+        {type === "accountExecutive" && <AccountExecutiveTable />}
       </div>
     </div>
   );
