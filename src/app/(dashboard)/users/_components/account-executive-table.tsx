@@ -88,15 +88,23 @@ export function AccountExecutiveTable() {
                   <Badge variant="secondary">
                     Base {pct(exec.baseCommissionRate)}
                   </Badge>
-                  <Badge variant="outline">
-                    T1 {pct(exec.tier1CommissionRate)}
-                  </Badge>
-                  <Badge variant="outline">
-                    T2 {pct(exec.tier2CommissionRate)}
-                  </Badge>
-                  <Badge variant="outline">
-                    T3 {pct(exec.tier3CommissionRate)}
-                  </Badge>
+                  {exec.tierSystemEnabled ? (
+                    <>
+                      <Badge variant="outline">
+                        T1 {pct(exec.tier1CommissionRate)}
+                      </Badge>
+                      <Badge variant="outline">
+                        T2 {pct(exec.tier2CommissionRate)}
+                      </Badge>
+                      <Badge variant="outline">
+                        T3 {pct(exec.tier3CommissionRate)}
+                      </Badge>
+                    </>
+                  ) : (
+                    <>
+                      <Badge variant="outline">Tier System Disabled</Badge>
+                    </>
+                  )}
                 </div>
               </TooltipTrigger>
               <TooltipContent>

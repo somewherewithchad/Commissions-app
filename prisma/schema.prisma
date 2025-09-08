@@ -173,6 +173,7 @@ model AccountExecutive {
   tier2CashCollectedThreshold Float
   tier3CommissionRate         Float
   tier3CashCollectedThreshold Float
+  tierSystemEnabled           Boolean
 
   invoices         AccountExecutiveInvoice[]
   collections      AccountExecutiveCollection[]

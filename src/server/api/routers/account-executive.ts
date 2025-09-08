@@ -407,6 +407,7 @@ export const accountExecutiveRouter = createTRPCRouter({
         tier2CashCollectedThreshold: z.number(),
         tier3CommissionRate: z.number(),
         tier3CashCollectedThreshold: z.number(),
+        tierSystemEnabled: z.boolean(),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -426,6 +427,7 @@ export const accountExecutiveRouter = createTRPCRouter({
           tier2CashCollectedThreshold: input.tier2CashCollectedThreshold,
           tier3CommissionRate: input.tier3CommissionRate / 100,
           tier3CashCollectedThreshold: input.tier3CashCollectedThreshold,
+          tierSystemEnabled: input.tierSystemEnabled,
         },
       });
       return {
@@ -445,6 +447,7 @@ export const accountExecutiveRouter = createTRPCRouter({
         tier2CashCollectedThreshold: z.number(),
         tier3CommissionRate: z.number(),
         tier3CashCollectedThreshold: z.number(),
+        tierSystemEnabled: z.boolean(),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -459,6 +462,7 @@ export const accountExecutiveRouter = createTRPCRouter({
           tier2CashCollectedThreshold: input.tier2CashCollectedThreshold,
           tier3CommissionRate: input.tier3CommissionRate / 100,
           tier3CashCollectedThreshold: input.tier3CashCollectedThreshold,
+          tierSystemEnabled: input.tierSystemEnabled,
         },
       });
 
