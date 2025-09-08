@@ -20,6 +20,8 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { api } from "@/trpc/react";
+import { toast } from "sonner";
 
 const formSchema = z
   .object({
@@ -113,6 +115,20 @@ const formSchema = z
   });
 
 export function AccountExecutiveDialog() {
+  const utils = api.useUtils();
+
+  const addAccountExecutive =
+    api.accountExecutive.addAccountExecutive.useMutation({
+      onSuccess: (res) => {
+        toast.success(res.message);
+        form.reset();
+        void utils.accountExecutive.getAllAccountExecutives.invalidate();
+      },
+      onError: (err) => {
+        toast.error(err.message);
+      },
+    });
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -129,7 +145,7 @@ export function AccountExecutiveDialog() {
   });
 
   const onSubmit = (values: z.infer<typeof formSchema>) => {
-    console.log(values);
+    addAccountExecutive.mutate(values);
   };
 
   return (
@@ -300,8 +316,8 @@ export function AccountExecutiveDialog() {
             </div>
 
             <DialogFooter>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? "Saving..." : "Save"}
+              <Button type="submit" disabled={addAccountExecutive.isPending}>
+                {addAccountExecutive.isPending ? "Saving..." : "Save"}
               </Button>
             </DialogFooter>
           </form>
