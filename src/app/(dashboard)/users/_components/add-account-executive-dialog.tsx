@@ -114,7 +114,7 @@ const formSchema = z
     }
   });
 
-export function AccountExecutiveDialog() {
+export function AddAccountExecutiveDialog() {
   const utils = api.useUtils();
 
   const addAccountExecutive =
