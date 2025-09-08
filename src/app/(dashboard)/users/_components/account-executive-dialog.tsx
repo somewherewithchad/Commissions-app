@@ -14,7 +14,6 @@ import { useForm } from "react-hook-form";
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -91,12 +90,12 @@ export function AccountExecutiveDialog() {
           Add Account Executive
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Add Account Executive</DialogTitle>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <FormField
               control={form.control}
               name="email"
@@ -104,7 +103,12 @@ export function AccountExecutiveDialog() {
                 <FormItem>
                   <FormLabel>Email</FormLabel>
                   <FormControl>
-                    <Input {...field} />
+                    <Input
+                      type="email"
+                      placeholder="jane@acme.com"
+                      autoComplete="email"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -117,7 +121,7 @@ export function AccountExecutiveDialog() {
                 <FormItem>
                   <FormLabel>Name</FormLabel>
                   <FormControl>
-                    <Input {...field} />
+                    <Input placeholder="Jane Doe" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -129,23 +133,34 @@ export function AccountExecutiveDialog() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Base Commission Rate</FormLabel>
-                  <FormControl>
-                    <Input {...field} />
-                  </FormControl>
+                  <div className="relative">
+                    <FormControl>
+                      <Input placeholder="5" className="pr-8" {...field} />
+                    </FormControl>
+                    <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-muted-foreground">
+                      %
+                    </span>
+                  </div>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <div className="flex gap-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="tier1CommissionRate"
                 render={({ field }) => (
                   <FormItem className="w-full">
                     <FormLabel>Tier 1 Commission Rate</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
+                    <div className="relative">
+                      <FormControl>
+                        <Input placeholder="7.5" className="pr-8" {...field} />
+                      </FormControl>
+                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-muted-foreground">
+                        %
+                      </span>
+                    </div>
+
                     <FormMessage />
                   </FormItem>
                 )}
@@ -157,24 +172,30 @@ export function AccountExecutiveDialog() {
                   <FormItem className="w-full">
                     <FormLabel>Tier 1 Cash Collected Threshold</FormLabel>
                     <FormControl>
-                      <Input {...field} />
+                      <Input placeholder="50000" {...field} />
                     </FormControl>
+
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
 
-            <div className="flex gap-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="tier2CommissionRate"
                 render={({ field }) => (
                   <FormItem className="w-full">
                     <FormLabel>Tier 2 Commission Rate</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
+                    <div className="relative">
+                      <FormControl>
+                        <Input placeholder="10" className="pr-8" {...field} />
+                      </FormControl>
+                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-muted-foreground">
+                        %
+                      </span>
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -186,7 +207,7 @@ export function AccountExecutiveDialog() {
                   <FormItem className="w-full">
                     <FormLabel>Tier 2 Cash Collected Threshold</FormLabel>
                     <FormControl>
-                      <Input {...field} />
+                      <Input placeholder="100000" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -194,16 +215,21 @@ export function AccountExecutiveDialog() {
               />
             </div>
 
-            <div className="flex gap-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="tier3CommissionRate"
                 render={({ field }) => (
                   <FormItem className="w-full">
                     <FormLabel>Tier 3 Commission Rate</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
+                    <div className="relative">
+                      <FormControl>
+                        <Input placeholder="12.5" className="pr-8" {...field} />
+                      </FormControl>
+                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-muted-foreground">
+                        %
+                      </span>
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -215,7 +241,7 @@ export function AccountExecutiveDialog() {
                   <FormItem className="w-full">
                     <FormLabel>Tier 3 Cash Collected Threshold</FormLabel>
                     <FormControl>
-                      <Input {...field} />
+                      <Input placeholder="150000" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -224,7 +250,9 @@ export function AccountExecutiveDialog() {
             </div>
 
             <DialogFooter>
-              <Button type="submit">Save</Button>
+              <Button type="submit" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? "Saving..." : "Save"}
+              </Button>
             </DialogFooter>
           </form>
         </Form>
