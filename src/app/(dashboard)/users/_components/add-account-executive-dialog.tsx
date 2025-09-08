@@ -23,7 +23,7 @@ import { Input } from "@/components/ui/input";
 import { api } from "@/trpc/react";
 import { toast } from "sonner";
 
-const formSchema = z
+export const formSchema = z
   .object({
     email: z.string().email("Please enter a valid email address"),
     name: z.string().min(1, "Name is required"),
@@ -156,7 +156,7 @@ export function AddAccountExecutiveDialog() {
           Add Account Executive
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>Add Account Executive</DialogTitle>
         </DialogHeader>

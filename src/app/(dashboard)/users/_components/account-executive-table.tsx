@@ -24,6 +24,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { EditAccountExecutiveDialog } from "@/app/(dashboard)/users/_components/edit-account-executive-dialog";
 
 type AccountExecutive =
   RouterOutputs["accountExecutive"]["getAllAccountExecutives"]["items"][number];
@@ -137,7 +138,7 @@ export function AccountExecutiveTable() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem disabled>No Options</DropdownMenuItem>
+                  <EditAccountExecutiveDialog accountExecutive={row.original} />
                 </DropdownMenuContent>
               </DropdownMenu>
             </>
