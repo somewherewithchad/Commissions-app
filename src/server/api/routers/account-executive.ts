@@ -433,6 +433,40 @@ export const accountExecutiveRouter = createTRPCRouter({
         message: "Account executive added successfully",
       };
     }),
+  editAccountExecutive: adminProcedure
+    .input(
+      z.object({
+        email: z.string().email(),
+        name: z.string(),
+        baseCommissionRate: z.number(),
+        tier1CommissionRate: z.number(),
+        tier1CashCollectedThreshold: z.number(),
+        tier2CommissionRate: z.number(),
+        tier2CashCollectedThreshold: z.number(),
+        tier3CommissionRate: z.number(),
+        tier3CashCollectedThreshold: z.number(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      await ctx.db.accountExecutive.update({
+        where: { email: input.email },
+        data: {
+          name: input.name,
+          baseCommissionRate: input.baseCommissionRate / 100,
+          tier1CommissionRate: input.tier1CommissionRate / 100,
+          tier1CashCollectedThreshold: input.tier1CashCollectedThreshold,
+          tier2CommissionRate: input.tier2CommissionRate / 100,
+          tier2CashCollectedThreshold: input.tier2CashCollectedThreshold,
+          tier3CommissionRate: input.tier3CommissionRate / 100,
+          tier3CashCollectedThreshold: input.tier3CashCollectedThreshold,
+        },
+      });
+
+      return {
+        success: true,
+        message: "Account executive updated successfully",
+      };
+    }),
 });
 
 const updateAccountExecutiveMonthlySummary = async (

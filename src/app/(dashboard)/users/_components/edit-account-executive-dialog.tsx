@@ -38,23 +38,35 @@ export function EditAccountExecutiveDialog({
   const utils = api.useUtils();
   const [open, setOpen] = React.useState(false);
 
+  const editAccountExecutive =
+    api.accountExecutive.editAccountExecutive.useMutation({
+      onSuccess: (res) => {
+        toast.success(res.message);
+        void utils.accountExecutive.getAllAccountExecutives.invalidate();
+        setOpen(false);
+      },
+      onError: (err) => {
+        toast.error(err.message);
+      },
+    });
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: accountExecutive.name,
       email: accountExecutive.email,
-      baseCommissionRate: accountExecutive.baseCommissionRate,
-      tier1CommissionRate: accountExecutive.tier1CommissionRate,
+      baseCommissionRate: accountExecutive.baseCommissionRate * 100,
+      tier1CommissionRate: accountExecutive.tier1CommissionRate * 100,
       tier1CashCollectedThreshold: accountExecutive.tier1CashCollectedThreshold,
-      tier2CommissionRate: accountExecutive.tier2CommissionRate,
+      tier2CommissionRate: accountExecutive.tier2CommissionRate * 100,
       tier2CashCollectedThreshold: accountExecutive.tier2CashCollectedThreshold,
-      tier3CommissionRate: accountExecutive.tier3CommissionRate,
+      tier3CommissionRate: accountExecutive.tier3CommissionRate * 100,
       tier3CashCollectedThreshold: accountExecutive.tier3CashCollectedThreshold,
     },
   });
 
   const onSubmit = (values: z.infer<typeof formSchema>) => {
-    console.log("=============> ", values);
+    editAccountExecutive.mutate(values);
   };
 
   return (
@@ -237,7 +249,9 @@ export function EditAccountExecutiveDialog({
               </div>
 
               <DialogFooter>
-                <Button type="submit">Save</Button>
+                <Button type="submit" disabled={editAccountExecutive.isPending}>
+                  {editAccountExecutive.isPending ? "Saving..." : "Save"}
+                </Button>
               </DialogFooter>
             </form>
           </Form>
