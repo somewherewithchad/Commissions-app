@@ -424,42 +424,34 @@ export const recruiterRouter = createTRPCRouter({
         }
       });
 
-      // --- Determine the TRUE start month for recalculation ---
-      if (negativeAdjustments.length > 0) {
-        const adjustmentDealIds = negativeAdjustments.map((adj) => adj.dealId);
-        const originalInvoices = await ctx.db.recruiterInvoice.findMany({
-          where: { dealId: { in: adjustmentDealIds } },
-          select: { month: true },
-        });
-
-        const allPossibleStartMonths = [
-          month,
-          ...originalInvoices.map((inv) => inv.month),
-        ];
-        allPossibleStartMonths.sort();
-
-        const earliestMonth = allPossibleStartMonths[0];
-        if (earliestMonth) {
-          recalculationStartMonth = earliestMonth;
-        }
-      }
-
-      // --- Massive Recalculation Logic (now starting from the correct month) ---
+      // --- Massive Recalculation Logic
       const allRecruiters = await ctx.db.recruiter.findMany({
         select: { email: true },
       });
-      const allSummariesAfterStart =
-        await ctx.db.recruiterMonthlySummary.findMany({
-          where: { month: { gte: recalculationStartMonth } },
-          select: { month: true },
-          distinct: ["month"],
-          orderBy: { month: "asc" },
-        });
+
       const monthsToProcess = [
-        ...new Set([
-          recalculationStartMonth,
-          ...allSummariesAfterStart.map((s) => s.month),
-        ]),
+        "2025-03",
+        "2025-04",
+        "2025-05",
+        "2025-06",
+        "2025-07",
+        "2025-08",
+        "2025-09",
+        "2025-10",
+        "2025-11",
+        "2025-12",
+        "2026-01",
+        "2026-02",
+        "2026-03",
+        "2026-04",
+        "2026-05",
+        "2026-06",
+        "2026-07",
+        "2026-08",
+        "2026-09",
+        "2026-10",
+        "2026-11",
+        "2026-12",
       ].sort();
 
       for (const rec of allRecruiters) {
