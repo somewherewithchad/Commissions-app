@@ -43,24 +43,33 @@ export const auth = betterAuth({
             message: "Email is required",
           });
         }
-        const [recruiter, recruitmentManager, accountExecutive] =
-          await Promise.all([
-            db.recruiter.findUnique({
-              where: {
-                email: email,
-              },
-            }),
-            db.recruitmentManager.findUnique({
-              where: {
-                email: email,
-              },
-            }),
-            db.accountExecutive.findUnique({
-              where: {
-                email: email,
-              },
-            }),
-          ]);
+        const [
+          recruiter,
+          recruitmentManager,
+          accountExecutive,
+          accountManager,
+        ] = await Promise.all([
+          db.recruiter.findUnique({
+            where: {
+              email: email,
+            },
+          }),
+          db.recruitmentManager.findUnique({
+            where: {
+              email: email,
+            },
+          }),
+          db.accountExecutive.findUnique({
+            where: {
+              email: email,
+            },
+          }),
+          db.accountManager.findUnique({
+            where: {
+              email: email,
+            },
+          }),
+        ]);
 
         if (recruiter) {
           await db.recruiter.update({
@@ -115,6 +124,17 @@ export const auth = betterAuth({
         if (accountExecutive) {
           await db.accountExecutive.update({
             where: { id: accountExecutive.id },
+            data: {
+              user: {
+                connect: { id: ctx.context.newSession?.user.id },
+              },
+            },
+          });
+        }
+
+        if (accountManager) {
+          await db.accountManager.update({
+            where: { id: accountManager.id },
             data: {
               user: {
                 connect: { id: ctx.context.newSession?.user.id },
