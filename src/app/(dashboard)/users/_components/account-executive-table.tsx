@@ -12,7 +12,6 @@ import { DataTableColumnHeader } from "@/components/data-table/data-table-column
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";

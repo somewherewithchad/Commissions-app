@@ -13,6 +13,7 @@ import { RecruitersTable } from "@/app/(dashboard)/users/_components/recruiters-
 import { parseAsString, useQueryState } from "nuqs";
 import { RecruiterManagerTable } from "@/app/(dashboard)/users/_components/recruiter-manager-table";
 import { AccountExecutiveTable } from "@/app/(dashboard)/users/_components/account-executive-table";
+import { AccountManagerTable } from "@/app/(dashboard)/users/_components/account-manager-table";
 
 export function UsersPage() {
   const router = useRouter();
@@ -41,6 +42,7 @@ export function UsersPage() {
         {type === "recruiter" && <RecruitersTable />}
         {type === "recruitmentManager" && <RecruiterManagerTable />}
         {type === "accountExecutive" && <AccountExecutiveTable />}
+        {type === "accountManager" && <AccountManagerTable />}
       </div>
     </div>
   );
