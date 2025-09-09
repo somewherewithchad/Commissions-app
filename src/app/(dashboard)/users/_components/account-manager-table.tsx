@@ -18,6 +18,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Icons } from "@/lib/icons";
 import { EditAccountManagerDialog } from "@/app/(dashboard)/users/_components/edit-account-manager-dialog";
+import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 type AccountManager =
   RouterOutputs["accountManager"]["getAllAccountManagers"]["items"][number];
@@ -61,6 +67,90 @@ export function AccountManagerTable() {
           label: "Email",
         },
         enableColumnFilter: true,
+        enableSorting: false,
+      },
+      {
+        id: "isAmerican",
+        accessorKey: "isAmerican",
+        header: ({ column }: { column: Column<AccountManager, unknown> }) => (
+          <DataTableColumnHeader column={column} title="American" />
+        ),
+        cell: ({ row }) => {
+          const isAmerican = row.original.isAmerican as boolean;
+          return (
+            <Badge variant={isAmerican ? "secondary" : "outline"}>
+              {isAmerican ? "American" : "International"}
+            </Badge>
+          );
+        },
+        meta: {
+          label: "American",
+        },
+        enableColumnFilter: true,
+        enableSorting: false,
+      },
+      {
+        id: "commission",
+        header: ({ column }: { column: Column<AccountManager, unknown> }) => (
+          <DataTableColumnHeader column={column} title="Commission" />
+        ),
+        cell: ({ row }) => {
+          const mgr = row.original as AccountManager;
+          const pct = (n: number) =>
+            `${(n * 100).toFixed(1).replace(/\.0$/, "")}\u0025`;
+          const dollars = (n: number) => `$${Math.round(n).toLocaleString()}`;
+          return (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex flex-wrap items-center gap-1 max-w-[260px]">
+                  {mgr.isAmerican ? (
+                    <Badge variant="secondary">
+                      American {pct(mgr.americanCommissionRate)}
+                    </Badge>
+                  ) : (
+                    <>
+                      <Badge variant="secondary">
+                        T1 {pct(mgr.tier1CommissionRate)}
+                      </Badge>
+                      <Badge variant="outline">
+                        T2 {pct(mgr.tier2CommissionRate)}
+                      </Badge>
+                      <Badge variant="outline">
+                        T3 {pct(mgr.tier3CommissionRate)}
+                      </Badge>
+                    </>
+                  )}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="grid gap-1">
+                  {mgr.isAmerican ? (
+                    <div>American Rate: {pct(mgr.americanCommissionRate)}</div>
+                  ) : (
+                    <>
+                      <div>
+                        Tier 1: {pct(mgr.tier1CommissionRate)} up to{" "}
+                        {dollars(mgr.tier1Threshold)}
+                      </div>
+                      <div>
+                        Tier 2: {pct(mgr.tier2CommissionRate)} up to{" "}
+                        {dollars(mgr.tier2Threshold)}
+                      </div>
+                      <div>
+                        Tier 3: {pct(mgr.tier3CommissionRate)} at{" "}
+                        {dollars(mgr.tier3Threshold)}+
+                      </div>
+                    </>
+                  )}
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          );
+        },
+        meta: {
+          label: "Commission",
+        },
+        enableColumnFilter: false,
         enableSorting: false,
       },
       {
