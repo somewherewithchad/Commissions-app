@@ -92,7 +92,7 @@ export function AddAccountManagerDialog() {
   const isAmerican = form.watch("isAmerican");
 
   const onSubmit = (values: z.infer<typeof formSchema>) => {
-    console.log("=============> ", values);
+    addAccountManager.mutate(values);
   };
 
   return (
