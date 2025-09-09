@@ -235,10 +235,14 @@ model AccountManager {
   user   User?   @relation(fields: [userId], references: [id])
   userId String? @unique
 
-  isAmerican          Boolean
-  tier1CommissionRate Float
-  tier2CommissionRate Float
-  tier3CommissionRate Float
+  isAmerican             Boolean
+  americanCommissionRate Float
+  tier1CommissionRate    Float
+  tier1Threshold         Float
+  tier2CommissionRate    Float
+  tier2Threshold         Float
+  tier3CommissionRate    Float
+  tier3Threshold         Float
 
   // invoices         AccountManagerInvoice[]
   // collections      AccountManagerCollection[]
