@@ -10,6 +10,14 @@ import { DataTable } from "@/components/data-table/data-table";
 import { DataTableToolbar } from "@/components/data-table/data-table-toolbar";
 import { DataTableColumnHeader } from "@/components/data-table/data-table-column-header";
 import { AddAccountManagerDialog } from "@/app/(dashboard)/users/_components/add-account-manager-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
+import { Icons } from "@/lib/icons";
+import { EditAccountManagerDialog } from "@/app/(dashboard)/users/_components/edit-account-manager-dialog";
 
 type AccountManager =
   RouterOutputs["accountManager"]["getAllAccountManagers"]["items"][number];
@@ -54,6 +62,27 @@ export function AccountManagerTable() {
         },
         enableColumnFilter: true,
         enableSorting: false,
+      },
+      {
+        id: "actions",
+        cell: function Cell({ row }) {
+          return (
+            <>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon">
+                    <Icons.moreHorizontal className="h-4 w-4" />
+                    <span className="sr-only">Open menu</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <EditAccountManagerDialog accountManager={row.original} />
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          );
+        },
+        size: 32,
       },
     ],
     []

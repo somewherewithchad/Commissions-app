@@ -23,54 +23,53 @@ import {
 import { Input } from "@/components/ui/input";
 import { api } from "@/trpc/react";
 import { toast } from "sonner";
-import { formSchema } from "@/app/(dashboard)/users/_components/add-account-executive-dialog";
+import { formSchema } from "@/app/(dashboard)/users/_components/add-account-manager-dialog";
 import { type RouterOutputs } from "@/trpc/react";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
-type AccountExecutive =
-  RouterOutputs["accountExecutive"]["getAllAccountExecutives"]["items"][number];
+type AccountManager =
+  RouterOutputs["accountManager"]["getAllAccountManagers"]["items"][number];
 
-export function EditAccountExecutiveDialog({
-  accountExecutive,
+export function EditAccountManagerDialog({
+  accountManager,
 }: {
-  accountExecutive: AccountExecutive;
+  accountManager: AccountManager;
 }) {
   const utils = api.useUtils();
   const [open, setOpen] = React.useState(false);
 
-  const editAccountExecutive =
-    api.accountExecutive.editAccountExecutive.useMutation({
-      onSuccess: (res) => {
-        toast.success(res.message);
-        void utils.accountExecutive.getAllAccountExecutives.invalidate();
-        setOpen(false);
-      },
-      onError: (err) => {
-        toast.error(err.message);
-      },
-    });
+  const editAccountManager = api.accountManager.editAccountManager.useMutation({
+    onSuccess: (res) => {
+      toast.success(res.message);
+      void utils.accountManager.getAllAccountManagers.invalidate();
+      setOpen(false);
+    },
+    onError: (err) => {
+      toast.error(err.message);
+    },
+  });
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name: accountExecutive.name,
-      email: accountExecutive.email,
-      baseCommissionRate: accountExecutive.baseCommissionRate * 100,
-      tier1CommissionRate: accountExecutive.tier1CommissionRate * 100,
-      tier1CashCollectedThreshold: accountExecutive.tier1CashCollectedThreshold,
-      tier2CommissionRate: accountExecutive.tier2CommissionRate * 100,
-      tier2CashCollectedThreshold: accountExecutive.tier2CashCollectedThreshold,
-      tier3CommissionRate: accountExecutive.tier3CommissionRate * 100,
-      tier3CashCollectedThreshold: accountExecutive.tier3CashCollectedThreshold,
-      tierSystemEnabled: accountExecutive.tierSystemEnabled,
+      name: accountManager.name,
+      email: accountManager.email,
+      isAmerican: accountManager.isAmerican,
+      americanCommissionRate: accountManager.americanCommissionRate * 100,
+      tier1CommissionRate: accountManager.tier1CommissionRate * 100,
+      tier1Threshold: accountManager.tier1Threshold,
+      tier2CommissionRate: accountManager.tier2CommissionRate * 100,
+      tier2Threshold: accountManager.tier2Threshold,
+      tier3CommissionRate: accountManager.tier3CommissionRate * 100,
+      tier3Threshold: accountManager.tier3Threshold,
     },
   });
 
-  const tierSystemEnabled = form.watch("tierSystemEnabled");
+  const isAmerican = form.watch("isAmerican");
 
   const onSubmit = (values: z.infer<typeof formSchema>) => {
-    editAccountExecutive.mutate(values);
+    editAccountManager.mutate(values);
   };
 
   return (
@@ -85,9 +84,9 @@ export function EditAccountExecutiveDialog({
             Edit
           </DropdownMenuItem>
         </DialogTrigger>
-        <DialogContent className="max-h-[90svh] overflow-y-auto">
+        <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Edit Account Executive</DialogTitle>
+            <DialogTitle>Edit Account Manager</DialogTitle>
           </DialogHeader>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -124,11 +123,11 @@ export function EditAccountExecutiveDialog({
               />
               <FormField
                 control={form.control}
-                name="tierSystemEnabled"
+                name="isAmerican"
                 render={({ field }) => (
                   <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
                     <div className="space-y-0.5">
-                      <FormLabel>Tier System Enabled</FormLabel>
+                      <FormLabel>Is American</FormLabel>
                     </div>
                     <FormControl>
                       <Switch
@@ -141,13 +140,22 @@ export function EditAccountExecutiveDialog({
               />
               <FormField
                 control={form.control}
-                name="baseCommissionRate"
+                name="americanCommissionRate"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Base Commission Rate</FormLabel>
+                    <FormLabel
+                      className={cn(!isAmerican && "text-muted-foreground")}
+                    >
+                      American Commission Rate
+                    </FormLabel>
                     <div className="relative">
                       <FormControl>
-                        <Input placeholder="5" className="pr-8" {...field} />
+                        <Input
+                          placeholder="5"
+                          className="pr-8"
+                          {...field}
+                          disabled={!isAmerican}
+                        />
                       </FormControl>
                       <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-muted-foreground">
                         %
@@ -164,11 +172,12 @@ export function EditAccountExecutiveDialog({
                   render={({ field }) => (
                     <FormItem className="w-full">
                       <FormLabel
-                        className={cn(
-                          !tierSystemEnabled && "text-muted-foreground"
-                        )}
+                        className={cn(isAmerican && "text-muted-foreground")}
                       >
                         Tier 1 Commission Rate
+                        <span className="text-xs text-muted-foreground">
+                          (Paid this month)
+                        </span>
                       </FormLabel>
                       <div className="relative">
                         <FormControl>
@@ -176,7 +185,7 @@ export function EditAccountExecutiveDialog({
                             placeholder="7.5"
                             className="pr-8"
                             {...field}
-                            disabled={!tierSystemEnabled}
+                            disabled={isAmerican}
                           />
                         </FormControl>
                         <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-muted-foreground">
@@ -190,21 +199,22 @@ export function EditAccountExecutiveDialog({
                 />
                 <FormField
                   control={form.control}
-                  name="tier1CashCollectedThreshold"
+                  name="tier1Threshold"
                   render={({ field }) => (
                     <FormItem className="w-full">
                       <FormLabel
-                        className={cn(
-                          !tierSystemEnabled && "text-muted-foreground"
-                        )}
+                        className={cn(isAmerican && "text-muted-foreground")}
                       >
-                        Tier 1 Cash Collected Threshold
+                        Tier 1 Threshold
+                        <span className="text-xs text-muted-foreground">
+                          ($0 - ${field.value})
+                        </span>
                       </FormLabel>
                       <FormControl>
                         <Input
                           placeholder="50000"
                           {...field}
-                          disabled={!tierSystemEnabled}
+                          disabled={isAmerican}
                         />
                       </FormControl>
 
@@ -213,7 +223,6 @@ export function EditAccountExecutiveDialog({
                   )}
                 />
               </div>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
@@ -221,54 +230,58 @@ export function EditAccountExecutiveDialog({
                   render={({ field }) => (
                     <FormItem className="w-full">
                       <FormLabel
-                        className={cn(
-                          !tierSystemEnabled && "text-muted-foreground"
-                        )}
+                        className={cn(isAmerican && "text-muted-foreground")}
                       >
                         Tier 2 Commission Rate
+                        <span className="text-xs text-muted-foreground">
+                          (Paid next month)
+                        </span>
                       </FormLabel>
                       <div className="relative">
                         <FormControl>
                           <Input
-                            placeholder="10"
+                            placeholder="7.5"
                             className="pr-8"
                             {...field}
-                            disabled={!tierSystemEnabled}
+                            disabled={isAmerican}
                           />
                         </FormControl>
                         <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-muted-foreground">
                           %
                         </span>
                       </div>
+
                       <FormMessage />
                     </FormItem>
                   )}
                 />
                 <FormField
                   control={form.control}
-                  name="tier2CashCollectedThreshold"
+                  name="tier2Threshold"
                   render={({ field }) => (
                     <FormItem className="w-full">
                       <FormLabel
-                        className={cn(
-                          !tierSystemEnabled && "text-muted-foreground"
-                        )}
+                        className={cn(isAmerican && "text-muted-foreground")}
                       >
-                        Tier 2 Cash Collected Threshold
+                        Tier 2 Threshold
+                        <span className="text-xs text-muted-foreground">
+                          (${Number(form.watch("tier1Threshold")) + 1} - $
+                          {field.value})
+                        </span>
                       </FormLabel>
                       <FormControl>
                         <Input
-                          placeholder="100000"
+                          placeholder="50000"
                           {...field}
-                          disabled={!tierSystemEnabled}
+                          disabled={isAmerican}
                         />
                       </FormControl>
+
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               </div>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
@@ -276,57 +289,60 @@ export function EditAccountExecutiveDialog({
                   render={({ field }) => (
                     <FormItem className="w-full">
                       <FormLabel
-                        className={cn(
-                          !tierSystemEnabled && "text-muted-foreground"
-                        )}
+                        className={cn(isAmerican && "text-muted-foreground")}
                       >
                         Tier 3 Commission Rate
+                        <span className="text-xs text-muted-foreground">
+                          (Paid next month)
+                        </span>
                       </FormLabel>
                       <div className="relative">
                         <FormControl>
                           <Input
-                            placeholder="12.5"
+                            placeholder="7.5"
                             className="pr-8"
                             {...field}
-                            disabled={!tierSystemEnabled}
+                            disabled={isAmerican}
                           />
                         </FormControl>
                         <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-muted-foreground">
                           %
                         </span>
                       </div>
+
                       <FormMessage />
                     </FormItem>
                   )}
                 />
                 <FormField
                   control={form.control}
-                  name="tier3CashCollectedThreshold"
+                  name="tier3Threshold"
                   render={({ field }) => (
                     <FormItem className="w-full">
                       <FormLabel
-                        className={cn(
-                          !tierSystemEnabled && "text-muted-foreground"
-                        )}
+                        className={cn(isAmerican && "text-muted-foreground")}
                       >
-                        Tier 3 Cash Collected Threshold
+                        Tier 3 Threshold
+                        <span className="text-xs text-muted-foreground">
+                          (${Number(form.watch("tier2Threshold")) + 1}+)
+                        </span>
                       </FormLabel>
                       <FormControl>
                         <Input
-                          placeholder="150000"
+                          placeholder="50000"
                           {...field}
-                          disabled={!tierSystemEnabled}
+                          disabled={isAmerican}
                         />
                       </FormControl>
+
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               </div>
-
               <DialogFooter>
-                <Button type="submit" disabled={editAccountExecutive.isPending}>
-                  {editAccountExecutive.isPending ? "Saving..." : "Save"}
+                <Button type="submit" disabled={editAccountManager.isPending}>
+                  {editAccountManager.isPending ? "Saving..." : "Save"}
                 </Button>
               </DialogFooter>
             </form>
