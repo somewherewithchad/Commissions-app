@@ -480,32 +480,24 @@ export const recruiterRouter = createTRPCRouter({
     }),
 });
 
-const updateRecruiterMonthlySummary = async (
+/**
+ * A time-aware function that determines a recruiter's threshold status
+ * based on their entire history UP TO a specific month.
+ * @returns {Promise<boolean>} - True if the threshold had been met as of that month.
+ */
+const getHistoricalThresholdStatus = async (
   month: string,
   recruiterEmail: string,
   ctx: Awaited<ReturnType<typeof createTRPCContext>>
-) => {
-  const deals = await ctx.db.recruiterInvoice.findMany({
-    where: { month, recruiterEmail },
+): Promise<boolean> => {
+  const summaryWithThreshold = await ctx.db.recruiterMonthlySummary.findFirst({
+    where: {
+      recruiterEmail,
+      month: { lte: month }, // <= Look at all history up to and including this month
+      totalDealsCompleted: { gte: 30000 },
+    },
   });
-  const cashCollections = await ctx.db.recruiterCollection.findMany({
-    where: { month, recruiterEmail },
-  });
-
-  const totalDealsCompleted = deals.reduce(
-    (acc, deal) => acc + deal.amountInvoiced,
-    0
-  );
-  const totalCashCollected = cashCollections.reduce(
-    (acc, cc) => acc + cc.amountPaid,
-    0
-  );
-
-  await ctx.db.recruiterMonthlySummary.upsert({
-    where: { recruiterEmail_month: { recruiterEmail, month } },
-    create: { month, totalDealsCompleted, totalCashCollected, recruiterEmail },
-    update: { totalDealsCompleted, totalCashCollected },
-  });
+  return !!summaryWithThreshold;
 };
 
 const calculateRecruiterPayouts = async (
@@ -513,14 +505,17 @@ const calculateRecruiterPayouts = async (
   recruiterEmail: string,
   ctx: Awaited<ReturnType<typeof createTRPCContext>>
 ) => {
-  const recruiter = await ctx.db.recruiter.findUnique({
-    where: { email: recruiterEmail },
-  });
   const summary = await ctx.db.recruiterMonthlySummary.findUnique({
     where: { recruiterEmail_month: { recruiterEmail, month } },
   });
+  if (!summary) return;
 
-  if (!recruiter || !summary) return;
+  // CRITICAL FIX: Determine the status based on the history up to THIS month.
+  const hadReachedThreshold = await getHistoricalThresholdStatus(
+    month,
+    recruiterEmail,
+    ctx
+  );
 
   const totalCashCollected = summary.totalCashCollected;
 
@@ -528,8 +523,9 @@ const calculateRecruiterPayouts = async (
     where: { sourceSummaryMonth: month, sourceRecruiterEmail: recruiterEmail },
   });
 
+  // CORRECTED: Only calculate payouts if the net cash collected is positive.
   if (totalCashCollected > 0) {
-    const baseRate = recruiter.has_reached_30k_deals_threshold ? 0.03 : 0.02;
+    const baseRate = hadReachedThreshold ? 0.03 : 0.02;
 
     await ctx.db.recruiterPayout.create({
       data: {
@@ -541,10 +537,8 @@ const calculateRecruiterPayouts = async (
       },
     });
 
-    if (
-      totalCashCollected > 30000 &&
-      recruiter.has_reached_30k_deals_threshold
-    ) {
+    // Bonus payout is only possible if the threshold had been met as of this month.
+    if (totalCashCollected > 30000 && hadReachedThreshold) {
       const remainder = totalCashCollected - 30000;
       const bonusAmount = remainder * 0.02;
       const delayedPayoutMonthString = format(
@@ -565,6 +559,8 @@ const calculateRecruiterPayouts = async (
   }
 };
 
+// This function's job is now ONLY to update the GLOBAL flag on the recruiter's main profile.
+// It is used for displaying their CURRENT overall status, not for historical calculations.
 const syncRecruiterThresholdStatus = async (
   recruiterEmail: string,
   ctx: Awaited<ReturnType<typeof createTRPCContext>>
@@ -577,7 +573,6 @@ const syncRecruiterThresholdStatus = async (
   const summaryWithThreshold = await ctx.db.recruiterMonthlySummary.findFirst({
     where: { recruiterEmail, totalDealsCompleted: { gte: 30000 } },
   });
-
   const hasEverReachedThreshold = !!summaryWithThreshold;
 
   if (recruiter.has_reached_30k_deals_threshold !== hasEverReachedThreshold) {
@@ -588,4 +583,32 @@ const syncRecruiterThresholdStatus = async (
     return true;
   }
   return false;
+};
+
+// The other helper function remains the same.
+const updateRecruiterMonthlySummary = async (
+  month: string,
+  recruiterEmail: string,
+  ctx: Awaited<ReturnType<typeof createTRPCContext>>
+) => {
+  // ... (This function is correct and does not need to change)
+  const deals = await ctx.db.recruiterInvoice.findMany({
+    where: { month, recruiterEmail },
+  });
+  const cashCollections = await ctx.db.recruiterCollection.findMany({
+    where: { month, recruiterEmail },
+  });
+  const totalDealsCompleted = deals.reduce(
+    (acc, deal) => acc + deal.amountInvoiced,
+    0
+  );
+  const totalCashCollected = cashCollections.reduce(
+    (acc, cc) => acc + cc.amountPaid,
+    0
+  );
+  await ctx.db.recruiterMonthlySummary.upsert({
+    where: { recruiterEmail_month: { recruiterEmail, month } },
+    create: { month, totalDealsCompleted, totalCashCollected, recruiterEmail },
+    update: { totalDealsCompleted, totalCashCollected },
+  });
 };

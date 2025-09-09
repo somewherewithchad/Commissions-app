@@ -24,11 +24,10 @@ model User {
   sessions      Session[]
   accounts      Account[]
 
-  // Relation to the Recruiter Profile
-  // A User can have one Recruiter profile associated with them.
   recruiterProfile          Recruiter?
   recruitmentManagerProfile RecruitmentManager?
   accountExecutiveProfile   AccountExecutive?
+  accountManagerProfile     AccountManager?
 
   @@unique([email])
   @@map("user")
@@ -226,6 +225,25 @@ model AccountExecutivePayout {
   sourceExecutiveEmail String
 
   executive AccountExecutive @relation(fields: [sourceExecutiveEmail], references: [email])
+}
+
+model AccountManager {
+  id    String @id @default(cuid())
+  name  String
+  email String @unique
+
+  user   User?   @relation(fields: [userId], references: [id])
+  userId String? @unique
+
+  isAmerican          Boolean
+  tier1CommissionRate Float
+  tier2CommissionRate Float
+  tier3CommissionRate Float
+
+  // invoices         AccountManagerInvoice[]
+  // collections      AccountManagerCollection[]
+  // monthlySummaries AccountManagerMonthlySummary[]
+  // payouts          AccountManagerPayout[]
 }
 
 model Session {
