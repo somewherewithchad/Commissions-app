@@ -37,8 +37,8 @@ export const accountManagerRouter = createTRPCRouter({
   addMonthlyData: adminProcedure
     .input(
       z.object({
-        invoicesFile: z.instanceof(File),
-        collectionsFile: z.instanceof(File),
+        // invoicesFile: z.instanceof(File),
+        // collectionsFile: z.instanceof(File),
       })
     )
     .mutation(async ({ input, ctx }) => {
