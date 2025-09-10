@@ -5,9 +5,10 @@ import {
   createTRPCContext,
   adminProcedure,
 } from "@/server/api/trpc";
-import { Prisma } from "@prisma/client";
 import { addMonths, format, parse } from "date-fns";
 import { z } from "zod";
+import { customAlphabet } from "nanoid";
+const nanoid = customAlphabet("1234567890abcdefghijklmnopqrstuvwxyz", 6);
 
 export const recruitmentManagerRouter = createTRPCRouter({
   // Queries
@@ -523,127 +524,93 @@ export const recruitmentManagerRouter = createTRPCRouter({
         (i) => i.amountInvoiced < 0
       );
 
-      await ctx.db.$transaction(async (tx) => {
-        // Step 1: Wipe the slate clean for the uploaded month.
-        await tx.recruitmentManagerInvoice.deleteMany({
-          where: { month: month },
-        });
-        await tx.recruitmentManagerCollection.deleteMany({
-          where: { month: month },
-        });
+      await ctx.db.recruitmentManagerInvoice.deleteMany({
+        where: { month: month },
+      });
+      await ctx.db.recruitmentManagerCollection.deleteMany({
+        where: { month: month },
+      });
+      const emailToNameMap = new Map<string, string>();
+      input.invoices.forEach((i) =>
+        emailToNameMap.set(i.managerEmail, i.managerName)
+      );
+      input.collections.forEach((c) =>
+        emailToNameMap.set(c.managerEmail, c.managerName)
+      );
+      await Promise.all(
+        Array.from(emailToNameMap.entries()).map(([email, name]) =>
+          ctx.db.recruitmentManager.upsert({
+            where: { email },
+            create: { email, name },
+            update: { name },
+          })
+        )
+      );
 
-        // Step 2: Upsert manager profiles.
-        const emailToNameMap = new Map<string, string>();
-        input.invoices.forEach((i) =>
-          emailToNameMap.set(i.managerEmail, i.managerName)
-        );
-        input.collections.forEach((c) =>
-          emailToNameMap.set(c.managerEmail, c.managerName)
-        );
-        await Promise.all(
-          Array.from(emailToNameMap.entries()).map(([email, name]) =>
-            tx.recruitmentManager.upsert({
-              where: { email },
-              create: { email, name },
-              update: { name },
-            })
+      if (positiveInvoices.length > 0) {
+        await ctx.db.recruitmentManagerInvoice.createMany({
+          data: positiveInvoices.map((invoice) => ({
+            dealId: invoice.dealId,
+            dealLink: invoice.dealLink,
+            dealName: invoice.dealName,
+            amountInvoiced: invoice.amountInvoiced,
+            month: invoice.month,
+            managerEmail: invoice.managerEmail,
+          })),
+        });
+      }
+      if (negativeAdjustments.length > 0) {
+        await ctx.db.recruitmentManagerInvoice.createMany({
+          data: negativeAdjustments.map((adjustment) => ({
+            dealId: `${adjustment.dealId}-${nanoid()}`,
+            dealLink: adjustment.dealLink,
+            dealName: adjustment.dealName,
+            amountInvoiced: adjustment.amountInvoiced,
+            month: adjustment.month,
+            managerEmail: adjustment.managerEmail,
+          })),
+        });
+      }
+      if (input.collections.length > 0) {
+        await ctx.db.recruitmentManagerCollection.createMany({
+          data: input.collections.map((collection) => ({
+            dealId: collection.dealId,
+            amountPaid: collection.amountPaid,
+            month: collection.month,
+            managerEmail: collection.managerEmail,
+          })),
+        });
+      }
+
+      const uniqueRecruitmentManagers = Array.from(
+        new Set(input.collections.map((c) => c.managerEmail))
+      );
+
+      for (const recruitmentManager of uniqueRecruitmentManagers) {
+        const totalInvoiced = input.invoices
+          .filter(
+            (i) => i.month === month && i.managerEmail === recruitmentManager
           )
-        );
+          .reduce((acc, i) => acc + i.amountInvoiced, 0);
+        const totalCollections = input.collections
+          .filter(
+            (c) => c.month === month && c.managerEmail === recruitmentManager
+          )
+          .reduce((acc, c) => acc + c.amountPaid, 0);
 
-        // Step 3: Insert the NEW (positive) data for this month.
-        if (positiveInvoices.length > 0) {
-          await tx.recruitmentManagerInvoice.createMany({
-            data: positiveInvoices.map((invoice) => ({
-              dealId: invoice.dealId,
-              dealLink: invoice.dealLink,
-              dealName: invoice.dealName,
-              amountInvoiced: invoice.amountInvoiced,
-              month: invoice.month,
-              managerEmail: invoice.managerEmail,
-            })),
-          });
-        }
-        if (input.collections.length > 0) {
-          await tx.recruitmentManagerCollection.createMany({
-            data: input.collections.map((collection) => ({
-              dealId: collection.dealId,
-              amountPaid: collection.amountPaid,
-              month: collection.month,
-              managerEmail: collection.managerEmail,
-            })),
-          });
-        }
+        await ctx.db.recruitmentManagerMonthlySummary.create({
+          data: {
+            month: month,
+            managerEmail: recruitmentManager,
+            totalInvoiced: totalInvoiced,
+            totalCollections: totalCollections,
+          },
+        });
 
-        // Step 4: Process the NEGATIVE adjustments as updates to historical deals.
-        for (const adjustment of negativeAdjustments) {
-          try {
-            await tx.recruitmentManagerInvoice.update({
-              where: { dealId: adjustment.dealId },
-              data: {
-                amountInvoiced: {
-                  decrement: Math.abs(adjustment.amountInvoiced),
-                },
-              },
-            });
-          } catch (error) {
-            continue;
-          }
-        }
-      });
-
-      // --- "MASSIVE RECALCULATION" LOGIC ---
-      const allManagers = await ctx.db.recruitmentManager.findMany({
-        select: { email: true },
-      });
-
-      const startMonth = lastLockedMonth;
-      const endMonth = month;
-
-      const monthsToProcess = [];
-      for (
-        let m = startMonth;
-        m <= endMonth;
-        m = format(addMonths(parse(m, "yyyy-MM", new Date()), 1), "yyyy-MM")
-      ) {
-        monthsToProcess.push(m);
-      }
-
-      // Step 6: First, update all summaries for all affected months.
-      for (const manager of allManagers) {
-        for (const m of monthsToProcess) {
-          if (m === month) {
-            const totalInvoiced = input.invoices
-              .filter((i) => i.month === m && i.managerEmail === manager.email)
-              .reduce((acc, i) => acc + i.amountInvoiced, 0);
-            const totalCollections = input.collections
-              .filter((c) => c.month === m && c.managerEmail === manager.email)
-              .reduce((acc, c) => acc + c.amountPaid, 0);
-            await ctx.db.recruitmentManagerMonthlySummary.upsert({
-              where: {
-                managerEmail_month: { managerEmail: manager.email, month: m },
-              },
-              create: {
-                month: m,
-                managerEmail: manager.email,
-                totalInvoiced: totalInvoiced,
-                totalCollections: totalCollections,
-              },
-              update: {
-                totalInvoiced: totalInvoiced,
-                totalCollections: totalCollections,
-              },
-            });
-          } else {
-            await updateManagerMonthlySummary(m, manager.email, ctx);
-          }
-        }
-      }
-
-      // Step 7: Then, calculate all payouts for all affected months.
-      for (const manager of allManagers) {
-        for (const m of monthsToProcess) {
-          await calculateManagerPayouts(m, manager.email, ctx);
-        }
+        // Need to calculate payouts
+        // The logic works something like this we take a cash collection row. lookback when was it invoiced.
+        // Total that specific month invoiced and determine then tier to get commission rate.
+        // Do this for all cash collection rows
       }
 
       return {
@@ -672,101 +639,3 @@ export const recruitmentManagerRouter = createTRPCRouter({
     return { success: true, message: "Data deleted successfully" };
   }),
 });
-
-const updateManagerMonthlySummary = async (
-  month: string,
-  managerEmail: string,
-  ctx: Awaited<ReturnType<typeof createTRPCContext>>
-) => {
-  const invoiceAggregation = await ctx.db.recruitmentManagerInvoice.aggregate({
-    _sum: { amountInvoiced: true },
-    where: { managerEmail, month },
-  });
-  const collectionAggregation =
-    await ctx.db.recruitmentManagerCollection.aggregate({
-      _sum: { amountPaid: true },
-      where: { managerEmail, month },
-    });
-
-  const totalInvoiced = invoiceAggregation._sum.amountInvoiced ?? 0;
-  const totalCollections = collectionAggregation._sum.amountPaid ?? 0;
-
-  await ctx.db.recruitmentManagerMonthlySummary.upsert({
-    where: { managerEmail_month: { managerEmail, month } },
-    create: { month, managerEmail, totalInvoiced, totalCollections },
-    update: { totalInvoiced, totalCollections },
-  });
-};
-
-const calculateManagerPayouts = async (
-  month: string, // The month of the collections being processed
-  managerEmail: string,
-  ctx: Awaited<ReturnType<typeof createTRPCContext>>
-) => {
-  await ctx.db.recruitmentManagerPayout.deleteMany({
-    where: { sourceManagerEmail: managerEmail, sourceSummaryMonth: month },
-  });
-
-  const collections = await ctx.db.recruitmentManagerCollection.findMany({
-    where: { managerEmail, month },
-  });
-  if (collections.length === 0) return;
-
-  const uniqueDealIds = [...new Set(collections.map((c) => c.dealId))];
-  const sourceInvoices = await ctx.db.recruitmentManagerInvoice.findMany({
-    where: { dealId: { in: uniqueDealIds }, managerEmail },
-  });
-  const dealIdToInvoiceMonthMap = new Map(
-    sourceInvoices.map((inv) => [inv.dealId, inv.month])
-  );
-
-  const uniqueInvoiceMonths = [
-    ...new Set(sourceInvoices.map((inv) => inv.month)),
-  ];
-
-  const monthlySummaries =
-    await ctx.db.recruitmentManagerMonthlySummary.findMany({
-      where: { managerEmail, month: { in: uniqueInvoiceMonths } },
-    });
-  const monthlyInvoiceTotals = new Map<string, number>(
-    monthlySummaries.map((s) => [s.month, s.totalInvoiced])
-  );
-
-  for (const collection of collections) {
-    const invoiceMonth = dealIdToInvoiceMonthMap.get(collection.dealId);
-    if (!invoiceMonth) continue;
-
-    const totalInvoicedForMonth = monthlyInvoiceTotals.get(invoiceMonth) ?? 0;
-
-    await ctx.db.recruitmentManagerPayout.create({
-      data: {
-        amount: collection.amountPaid * 0.01,
-        payoutMonth: month,
-        sourceSummaryMonth: month,
-        sourceManagerEmail: managerEmail,
-      },
-    });
-
-    let bonusRate = 0;
-    if (totalInvoicedForMonth >= 150000) {
-      bonusRate = 0.005;
-    } else if (totalInvoicedForMonth >= 100000) {
-      bonusRate = 0.0025;
-    }
-
-    if (bonusRate > 0) {
-      const delayedPayoutMonth = format(
-        addMonths(parse(month, "yyyy-MM", new Date()), 1),
-        "yyyy-MM"
-      );
-      await ctx.db.recruitmentManagerPayout.create({
-        data: {
-          amount: collection.amountPaid * bonusRate,
-          payoutMonth: delayedPayoutMonth,
-          sourceSummaryMonth: month,
-          sourceManagerEmail: managerEmail,
-        },
-      });
-    }
-  }
-};
