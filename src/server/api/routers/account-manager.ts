@@ -110,17 +110,23 @@ export const accountManagerRouter = createTRPCRouter({
       const approxEqual = (a: number, b: number, eps = 0.01) =>
         Math.abs(a - b) <= eps;
       const usedCollectionIdsByKey = new Map<string, Set<string>>();
+      // Track owner-bonus matches separately so multiple owner-bonus payouts
+      // in the same month do not all attach to the same collection row.
+      const usedOwnerCollectionIdsByKey = new Map<string, Set<string>>();
 
       const results = await Promise.all(
         payoutsRaw.map(async (p) => {
           const isBonus = p.payoutMonth !== p.sourceSummaryMonth;
           const isOwnerBonus = !!p.isDealOwnerBonus;
           const k = keyFor(p.sourceAccountManagerEmail, p.sourceSummaryMonth);
-          const usedSet = usedCollectionIdsByKey.get(k) ?? new Set<string>();
+          const ownerUsedSet =
+            usedOwnerCollectionIdsByKey.get(k) ?? new Set<string>();
+          const nonOwnerUsedSet =
+            usedCollectionIdsByKey.get(k) ?? new Set<string>();
           const allCandidates = collectionsByEmailMonth.get(k) ?? [];
           const candidates = isOwnerBonus
-            ? allCandidates
-            : allCandidates.filter((c) => !usedSet.has(c.id));
+            ? allCandidates.filter((c) => !ownerUsedSet.has(c.id))
+            : allCandidates.filter((c) => !nonOwnerUsedSet.has(c.id));
 
           let matched: (typeof candidates)[number] | null = null;
           let sourceInvoiceMonth = p.sourceSummaryMonth;
@@ -174,10 +180,14 @@ export const accountManagerRouter = createTRPCRouter({
           }
 
           if (matched) {
-            if (!isOwnerBonus) {
-              usedSet.add(matched.id);
+            if (isOwnerBonus) {
+              ownerUsedSet.add(matched.id);
+              if (!usedOwnerCollectionIdsByKey.has(k))
+                usedOwnerCollectionIdsByKey.set(k, ownerUsedSet);
+            } else {
+              nonOwnerUsedSet.add(matched.id);
               if (!usedCollectionIdsByKey.has(k))
-                usedCollectionIdsByKey.set(k, usedSet);
+                usedCollectionIdsByKey.set(k, nonOwnerUsedSet);
             }
             const inv = dealIdToInvoice.get(matched.dealId);
             if (inv) {
