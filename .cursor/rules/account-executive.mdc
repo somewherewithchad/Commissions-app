@@ -1,0 +1,11 @@
+---
+description: Specs of Account Executive user type
+globs:
+alwaysApply: false
+---
+
+Rules for Account Executive
+
+- depends upon cash collection
+- total the cash collection and then determine the tier to get commission rate
+- then generate payouts

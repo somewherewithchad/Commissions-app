@@ -193,11 +193,10 @@ model AccountExecutiveInvoice {
 }
 
 model AccountExecutiveCollection {
-  id             String @id @default(cuid())
-  amountPaid     Float
-  month          String
-  dealId         String
-  commissionRate Float
+  id         String @id @default(cuid())
+  amountPaid Float
+  month      String
+  dealId     String
 
   executive      AccountExecutive @relation(fields: [executiveEmail], references: [email])
   executiveEmail String
@@ -208,7 +207,6 @@ model AccountExecutiveMonthlySummary {
   month            String
   totalInvoiced    Float
   totalCollections Float
-  commissionRate   Float // Storing the rate for the month simplifies payout calculation
 
   executive      AccountExecutive @relation(fields: [executiveEmail], references: [email])
   executiveEmail String

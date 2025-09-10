@@ -1,8 +1,4 @@
-import {
-  createTRPCRouter,
-  createTRPCContext,
-  adminProcedure,
-} from "@/server/api/trpc";
+import { createTRPCRouter, adminProcedure } from "@/server/api/trpc";
 import { z } from "zod";
 import { protectedProcedure, publicProcedure } from "@/server/api/trpc";
 import { addMonths, format, parse, subMonths } from "date-fns";
@@ -449,7 +445,6 @@ export const recruiterRouter = createTRPCRouter({
           },
         });
 
-        // update threshold status in db
         if (totalDealsCompleted >= 30000) {
           await ctx.db.recruiter.update({
             where: { email: recruiter },
