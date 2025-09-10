@@ -37,8 +37,27 @@ export const accountManagerRouter = createTRPCRouter({
   addMonthlyData: adminProcedure
     .input(
       z.object({
-        // invoicesFile: z.instanceof(File),
-        // collectionsFile: z.instanceof(File),
+        invoices: z.array(
+          z.object({
+            dealId: z.string(),
+            dealLink: z.string().optional(),
+            dealName: z.string(),
+            accountManagerName: z.string(),
+            accountManagerEmail: z.string().email(),
+            amountInvoiced: z.number(),
+            month: z.string().regex(/^\d{4}-\d{2}$/),
+            isDealOwner: z.boolean(),
+          })
+        ),
+        collections: z.array(
+          z.object({
+            dealId: z.string(),
+            accountManagerName: z.string(),
+            accountManagerEmail: z.string().email(),
+            amountPaid: z.number(),
+            month: z.string().regex(/^\d{4}-\d{2}$/),
+          })
+        ),
       })
     )
     .mutation(async ({ input, ctx }) => {

@@ -168,24 +168,28 @@ export default function AccountManagerDataForm() {
         return;
       }
 
-      // addMonthlyData.mutate({
-      //   invoices: invoiceRows.map((invoice) => ({
-      //     dealId: invoice["Deal ID"],
-      //     dealLink: invoice["Deal link"],
-      //     dealName: invoice["Deal name"],
-      //     executiveName: invoice["Account Executive Name"],
-      //     executiveEmail: invoice["Account Executive Email"].toLowerCase(),
-      //     amountInvoiced: Number(invoice["Amount invoiced"].replace(/,/g, "")),
-      //     month: convertToYearMonth(canonicalMonth),
-      //   })),
-      //   collections: collectionRows.map((collection) => ({
-      //     dealId: collection["Deal ID"],
-      //     executiveName: collection["Account Executive Name"],
-      //     executiveEmail: collection["Account Executive Email"].toLowerCase(),
-      //     amountPaid: Number(collection["Amount paid"].replace(/,/g, "")),
-      //     month: convertToYearMonth(canonicalMonth),
-      //   })),
-      // });
+      addMonthlyData.mutate({
+        invoices: invoiceRows.map((invoice) => ({
+          dealId: invoice["Deal ID"],
+          dealLink: invoice["Deal link"],
+          dealName: invoice["Deal name"],
+          accountManagerName: invoice["Account Manager Name"],
+          accountManagerEmail: invoice["Account Manager Email"].toLowerCase(),
+          amountInvoiced: Number(invoice["Amount invoiced"].replace(/,/g, "")),
+          month: convertToYearMonth(canonicalMonth),
+          isDealOwner:
+            invoice["Account manager is the deal owner"].toLowerCase() ===
+            "yes",
+        })),
+        collections: collectionRows.map((collection) => ({
+          dealId: collection["Deal ID"],
+          accountManagerName: collection["Account Manager Name"],
+          accountManagerEmail:
+            collection["Account Manager Email"].toLowerCase(),
+          amountPaid: Number(collection["Amount paid"].replace(/,/g, "")),
+          month: convertToYearMonth(canonicalMonth),
+        })),
+      });
     } catch (err) {
       console.error(err);
     }
