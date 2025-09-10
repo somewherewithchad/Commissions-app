@@ -171,12 +171,6 @@ export function AccountManagerPayouts({ selected }: { selected: Date | null }) {
                                                 Amount Paid
                                               </TableHead>
                                               <TableHead>Deal Link</TableHead>
-                                              <TableHead className="text-right">
-                                                Invoice Total
-                                              </TableHead>
-                                              <TableHead>
-                                                Invoice Month
-                                              </TableHead>
                                             </TableRow>
                                           </TableHeader>
                                           <TableBody>
@@ -214,23 +208,6 @@ export function AccountManagerPayouts({ selected }: { selected: Date | null }) {
                                                       —
                                                     </span>
                                                   )}
-                                                </TableCell>
-                                                <TableCell className="text-right">
-                                                  {formatCurrency(
-                                                    p.sourceInvoiceTotal || 0
-                                                  )}
-                                                </TableCell>
-                                                <TableCell>
-                                                  {p.sourceInvoiceMonth
-                                                    ? format(
-                                                        parse(
-                                                          p.sourceInvoiceMonth,
-                                                          "yyyy-MM",
-                                                          new Date()
-                                                        ),
-                                                        "MMM yyyy"
-                                                      )
-                                                    : "—"}
                                                 </TableCell>
                                               </TableRow>
                                             ) : (
