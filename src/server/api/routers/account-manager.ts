@@ -112,11 +112,13 @@ export const accountManagerRouter = createTRPCRouter({
       const results = await Promise.all(
         payoutsRaw.map(async (p) => {
           const isBonus = p.payoutMonth !== p.sourceSummaryMonth;
+          const isOwnerBonus = !!p.isDealOwnerBonus;
           const k = keyFor(p.sourceAccountManagerEmail, p.sourceSummaryMonth);
           const usedSet = usedCollectionIdsByKey.get(k) ?? new Set<string>();
-          const candidates = (collectionsByEmailMonth.get(k) ?? []).filter(
-            (c) => !usedSet.has(c.id)
-          );
+          const allCandidates = collectionsByEmailMonth.get(k) ?? [];
+          const candidates = isOwnerBonus
+            ? allCandidates
+            : allCandidates.filter((c) => !usedSet.has(c.id));
 
           let matched: (typeof candidates)[number] | null = null;
           let sourceInvoiceMonth = p.sourceSummaryMonth;
@@ -130,9 +132,18 @@ export const accountManagerRouter = createTRPCRouter({
               approxEqual(c.amountPaid, target)
             );
             if (matches.length > 0) {
-              matched =
-                matches.find((c) => dealIdToInvoice.has(c.dealId)) ??
-                matches[0]!;
+              if (isOwnerBonus) {
+                matched =
+                  matches.find(
+                    (c) => dealIdToInvoice.get(c.dealId)?.isDealOwner === true
+                  ) ??
+                  matches.find((c) => dealIdToInvoice.has(c.dealId)) ??
+                  matches[0]!;
+              } else {
+                matched =
+                  matches.find((c) => dealIdToInvoice.has(c.dealId)) ??
+                  matches[0]!;
+              }
             }
           }
 
@@ -147,7 +158,10 @@ export const accountManagerRouter = createTRPCRouter({
               if (
                 delta < bestDelta ||
                 (Math.abs(delta - bestDelta) <= 1e-6 &&
-                  cHasInvoice &&
+                  // Prefer a candidate with invoice, and if owner bonus, prefer deal-owner invoice
+                  (isOwnerBonus
+                    ? dealIdToInvoice.get(c.dealId)?.isDealOwner === true
+                    : cHasInvoice) &&
                   !bestHasInvoice)
               ) {
                 best = c;
@@ -158,9 +172,11 @@ export const accountManagerRouter = createTRPCRouter({
           }
 
           if (matched) {
-            usedSet.add(matched.id);
-            if (!usedCollectionIdsByKey.has(k))
-              usedCollectionIdsByKey.set(k, usedSet);
+            if (!isOwnerBonus) {
+              usedSet.add(matched.id);
+              if (!usedCollectionIdsByKey.has(k))
+                usedCollectionIdsByKey.set(k, usedSet);
+            }
             const inv = dealIdToInvoice.get(matched.dealId);
             if (inv) {
               sourceInvoiceMonth = inv.month;
@@ -551,8 +567,8 @@ const calculateAccountManagerPayouts = async (
       if (isDealOwner && c.amountPaid > 0) {
         await ctx.db.accountManagerPayout.create({
           data: {
-            amount: c.amountPaid * 0.01,
-            commissionRate: 0.01,
+            amount: c.amountPaid * 0.02,
+            commissionRate: 0.02,
             payoutMonth: month,
             sourceSummaryMonth: month,
             sourceAccountManagerEmail: accountManagerEmail,
