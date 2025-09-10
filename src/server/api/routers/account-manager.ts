@@ -35,6 +35,172 @@ export const accountManagerRouter = createTRPCRouter({
         pageCount,
       };
     }),
+  getPayoutsByMonth: protectedProcedure
+    .input(z.object({ month: z.string().regex(/^\d{4}-\d{2}$/) }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.session?.user?.role !== "admin") {
+        throw new Error("Not authorized");
+      }
+
+      const payoutsRaw = await ctx.db.accountManagerPayout.findMany({
+        where: { payoutMonth: input.month },
+        orderBy: { amount: "desc" },
+      });
+      if (payoutsRaw.length === 0) return [] as const;
+
+      const uniqueEmails = Array.from(
+        new Set(payoutsRaw.map((p) => p.sourceAccountManagerEmail))
+      );
+      const uniqueSourceMonths = Array.from(
+        new Set(payoutsRaw.map((p) => p.sourceSummaryMonth))
+      );
+
+      const managers = await ctx.db.accountManager.findMany({
+        where: { email: { in: uniqueEmails } },
+      });
+      const emailToManager = new Map(managers.map((m) => [m.email, m]));
+
+      const allCollections = await ctx.db.accountManagerCollection.findMany({
+        where: {
+          accountManagerEmail: { in: uniqueEmails },
+          month: { in: uniqueSourceMonths },
+        },
+      });
+      const keyFor = (email: string, month: string) => `${email}__${month}`;
+      const collectionsByEmailMonth = new Map<string, typeof allCollections>();
+      for (const c of allCollections) {
+        const k = keyFor(c.accountManagerEmail, c.month);
+        const list = collectionsByEmailMonth.get(k);
+        if (list) list.push(c);
+        else collectionsByEmailMonth.set(k, [c]);
+      }
+
+      const allDealIds = Array.from(
+        new Set(allCollections.map((c) => c.dealId))
+      );
+      const relatedInvoices = await ctx.db.accountManagerInvoice.findMany({
+        where: {
+          dealId: { in: allDealIds },
+          accountManagerEmail: { in: uniqueEmails },
+        },
+      });
+      const dealIdToInvoice = new Map(
+        relatedInvoices.map((inv) => [inv.dealId, inv])
+      );
+
+      const uniqueInvoiceMonths = Array.from(
+        new Set(relatedInvoices.map((inv) => inv.month))
+      );
+      const monthlySummaries =
+        await ctx.db.accountManagerMonthlySummary.findMany({
+          where: {
+            accountManagerEmail: { in: uniqueEmails },
+            month: { in: uniqueInvoiceMonths },
+          },
+        });
+      const managerMonthToInvoiceTotal = new Map(
+        monthlySummaries.map((s) => [
+          keyFor(s.accountManagerEmail, s.month),
+          s.totalInvoiced,
+        ])
+      );
+
+      const approxEqual = (a: number, b: number, eps = 0.01) =>
+        Math.abs(a - b) <= eps;
+      const usedCollectionIdsByKey = new Map<string, Set<string>>();
+
+      const results = await Promise.all(
+        payoutsRaw.map(async (p) => {
+          const isBonus = p.payoutMonth !== p.sourceSummaryMonth;
+          const k = keyFor(p.sourceAccountManagerEmail, p.sourceSummaryMonth);
+          const usedSet = usedCollectionIdsByKey.get(k) ?? new Set<string>();
+          const candidates = (collectionsByEmailMonth.get(k) ?? []).filter(
+            (c) => !usedSet.has(c.id)
+          );
+
+          let matched: (typeof candidates)[number] | null = null;
+          let sourceInvoiceMonth = p.sourceSummaryMonth;
+          let sourceInvoiceTotal = 0;
+          const rate = p.commissionRate;
+
+          // Try to match based on rate
+          if (rate > 0) {
+            const target = p.amount / rate;
+            const matches = candidates.filter((c) =>
+              approxEqual(c.amountPaid, target)
+            );
+            if (matches.length > 0) {
+              matched =
+                matches.find((c) => dealIdToInvoice.has(c.dealId)) ??
+                matches[0]!;
+            }
+          }
+
+          // Fallback to closest
+          if (!matched && candidates.length > 0 && rate > 0) {
+            let best = candidates[0]!;
+            let bestDelta = Math.abs(p.amount - best.amountPaid * rate);
+            for (const c of candidates) {
+              const delta = Math.abs(p.amount - c.amountPaid * rate);
+              const cHasInvoice = dealIdToInvoice.has(c.dealId);
+              const bestHasInvoice = dealIdToInvoice.has(best.dealId);
+              if (
+                delta < bestDelta ||
+                (Math.abs(delta - bestDelta) <= 1e-6 &&
+                  cHasInvoice &&
+                  !bestHasInvoice)
+              ) {
+                best = c;
+                bestDelta = delta;
+              }
+            }
+            matched = best;
+          }
+
+          if (matched) {
+            usedSet.add(matched.id);
+            if (!usedCollectionIdsByKey.has(k))
+              usedCollectionIdsByKey.set(k, usedSet);
+            const inv = dealIdToInvoice.get(matched.dealId);
+            if (inv) {
+              sourceInvoiceMonth = inv.month;
+              sourceInvoiceTotal =
+                managerMonthToInvoiceTotal.get(
+                  keyFor(p.sourceAccountManagerEmail, inv.month)
+                ) ?? 0;
+            }
+          }
+
+          const type = p.isDealOwnerBonus
+            ? ("owner-bonus" as const)
+            : isBonus
+            ? ("bonus" as const)
+            : ("base" as const);
+
+          return {
+            ...p,
+            managerName:
+              emailToManager.get(p.sourceAccountManagerEmail)?.name ?? null,
+            type,
+            sourceInvoiceMonth,
+            sourceInvoiceTotal,
+            sourceCollection: matched
+              ? {
+                  id: matched.id,
+                  dealId: matched.dealId,
+                  dealName:
+                    dealIdToInvoice.get(matched.dealId)?.dealName ?? null,
+                  dealLink:
+                    dealIdToInvoice.get(matched.dealId)?.dealLink ?? null,
+                  amountPaid: matched.amountPaid,
+                }
+              : null,
+          } as const;
+        })
+      );
+
+      return results;
+    }),
   // Mutations
   addMonthlyData: adminProcedure
     .input(

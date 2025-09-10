@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { RecruitmentManagerPayouts } from "@/app/(dashboard)/payouts/_components/recruitment-manager-payouts";
 import { AccountExecutivePayouts } from "@/app/(dashboard)/payouts/_components/account-executive-payouts";
+import { AccountManagerPayouts } from "@/app/(dashboard)/payouts/_components/account-manager-payouts";
 
 export function PayoutsPage() {
   const [selected, setSelected] = React.useState<Date | null>(new Date());
@@ -33,8 +34,11 @@ export function PayoutsPage() {
       return <RecruiterPayouts selected={selected} />;
     } else if (userType === "recruitmentManager") {
       return <RecruitmentManagerPayouts selected={selected} />;
+    } else if (userType === "accountExecutive") {
+      return <AccountExecutivePayouts selected={selected} />;
+    } else if (userType === "accountManager") {
+      return <AccountManagerPayouts selected={selected} />;
     }
-    return <AccountExecutivePayouts selected={selected} />;
   };
 
   return (
