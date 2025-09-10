@@ -611,7 +611,31 @@ export const recruitmentManagerRouter = createTRPCRouter({
       // Step 6: First, update all summaries for all affected months.
       for (const manager of allManagers) {
         for (const m of monthsToProcess) {
-          await updateManagerMonthlySummary(m, manager.email, ctx);
+          if (m === month) {
+            const totalInvoiced = input.invoices
+              .filter((i) => i.month === m && i.managerEmail === manager.email)
+              .reduce((acc, i) => acc + i.amountInvoiced, 0);
+            const totalCollections = input.collections
+              .filter((c) => c.month === m && c.managerEmail === manager.email)
+              .reduce((acc, c) => acc + c.amountPaid, 0);
+            await ctx.db.recruitmentManagerMonthlySummary.upsert({
+              where: {
+                managerEmail_month: { managerEmail: manager.email, month: m },
+              },
+              create: {
+                month: m,
+                managerEmail: manager.email,
+                totalInvoiced: totalInvoiced,
+                totalCollections: totalCollections,
+              },
+              update: {
+                totalInvoiced: totalInvoiced,
+                totalCollections: totalCollections,
+              },
+            });
+          } else {
+            await updateManagerMonthlySummary(m, manager.email, ctx);
+          }
         }
       }
 

@@ -7,6 +7,8 @@ import {
 import { z } from "zod";
 import { lastLockedMonth } from "@/lib/utils";
 import { addMonths, format, parse } from "date-fns";
+import { customAlphabet } from "nanoid";
+const nanoid = customAlphabet("1234567890abcdefghijklmnopqrstuvwxyz", 6);
 
 export const accountManagerRouter = createTRPCRouter({
   // Queries
@@ -315,6 +317,19 @@ export const accountManagerRouter = createTRPCRouter({
               month: invoice.month,
               isDealOwner: invoice.isDealOwner,
               accountManagerEmail: invoice.accountManagerEmail,
+            })),
+          });
+        }
+        if (negativeAdjustments.length > 0) {
+          await tx.accountManagerInvoice.createMany({
+            data: negativeAdjustments.map((adjustment) => ({
+              dealId: `${adjustment.dealId}-${nanoid()}`,
+              dealLink: adjustment.dealLink,
+              dealName: adjustment.dealName,
+              amountInvoiced: adjustment.amountInvoiced,
+              month: adjustment.month,
+              isDealOwner: adjustment.isDealOwner,
+              accountManagerEmail: adjustment.accountManagerEmail,
             })),
           });
         }

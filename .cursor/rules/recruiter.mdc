@@ -1,0 +1,13 @@
+---
+description: Specs of Recruiter user type
+globs:
+alwaysApply: false
+---
+
+Rules for Recruiter
+
+- Depends on cash collected
+- We take total of cash collected
+- calculation are based on cash collection
+- if in any past month or current month total invoiced was 30K we use 3% other wise 2% on total collection
+- - if 30K threshold reached + collection greater than 30K we payout 2% bonus next month.

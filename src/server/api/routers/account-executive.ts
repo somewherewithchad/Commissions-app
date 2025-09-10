@@ -395,7 +395,26 @@ export const accountExecutiveRouter = createTRPCRouter({
       for (const executive of allExecutives) {
         // Update summaries for the current month AND any affected historical months.
         for (const m of monthsToUpdateSummaries) {
-          await updateAccountExecutiveMonthlySummary(m, executive.email, ctx);
+          if (m === month) {
+            const totalInvoiced = input.invoices
+              .filter(
+                (i) => i.month === m && i.executiveEmail === executive.email
+              )
+              .reduce((acc, i) => acc + i.amountInvoiced, 0);
+            const totalCollections = input.collections
+              .filter(
+                (c) => c.month === m && c.executiveEmail === executive.email
+              )
+              .reduce((acc, c) => acc + c.amountPaid, 0);
+            await updateAccountExecutiveMonthlySummary(
+              m,
+              executive.email,
+              ctx,
+              { totalInvoiced, totalCollections }
+            );
+          } else {
+            await updateAccountExecutiveMonthlySummary(m, executive.email, ctx);
+          }
         }
         // But only calculate the payout for the current month of the upload.
         await calculateAccountExecutivePayouts(month, executive.email, ctx);
@@ -508,7 +527,11 @@ export const accountExecutiveRouter = createTRPCRouter({
 const updateAccountExecutiveMonthlySummary = async (
   month: string,
   executiveEmail: string,
-  ctx: Awaited<ReturnType<typeof createTRPCContext>>
+  ctx: Awaited<ReturnType<typeof createTRPCContext>>,
+  override?: {
+    totalInvoiced?: number;
+    totalCollections?: number;
+  }
 ) => {
   const invoices = await ctx.db.accountExecutiveInvoice.findMany({
     where: { executiveEmail, month },
@@ -516,11 +539,12 @@ const updateAccountExecutiveMonthlySummary = async (
   const collections = await ctx.db.accountExecutiveCollection.findMany({
     where: { executiveEmail, month },
   });
-  const totalInvoiced = invoices.reduce((acc, i) => acc + i.amountInvoiced, 0);
-  const totalCollections = collections.reduce(
-    (acc, c) => acc + c.amountPaid,
-    0
-  );
+  const totalInvoiced =
+    override?.totalInvoiced ??
+    invoices.reduce((acc, i) => acc + i.amountInvoiced, 0);
+  const totalCollections =
+    override?.totalCollections ??
+    collections.reduce((acc, c) => acc + c.amountPaid, 0);
   // Compute commission rate at runtime from AccountExecutive tier settings
   const exec = await ctx.db.accountExecutive.findUnique({
     where: { email: executiveEmail },

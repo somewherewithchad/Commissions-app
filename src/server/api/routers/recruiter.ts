@@ -6,9 +6,9 @@ import {
 import { z } from "zod";
 import { protectedProcedure, publicProcedure } from "@/server/api/trpc";
 import { addMonths, format, parse, subMonths } from "date-fns";
-import { Prisma } from "@prisma/client";
-import { createOrderByClause, sortSchema } from "@/lib/sorting";
 import { lastLockedMonth } from "@/lib/utils";
+import { customAlphabet } from "nanoid";
+const nanoid = customAlphabet("1234567890abcdefghijklmnopqrstuvwxyz", 6);
 
 export const recruiterRouter = createTRPCRouter({
   // Queries
@@ -373,94 +373,124 @@ export const recruiterRouter = createTRPCRouter({
         (d) => d.amountInvoiced < 0
       );
 
-      await ctx.db.$transaction(async (tx) => {
-        await tx.recruiterInvoice.deleteMany({ where: { month: month } });
-        await tx.recruiterCollection.deleteMany({ where: { month: month } });
+      await ctx.db.recruiterInvoice.deleteMany({ where: { month: month } });
+      await ctx.db.recruiterCollection.deleteMany({ where: { month: month } });
 
-        const emailToName = new Map<string, string>();
-        input.deals.forEach((d) =>
-          emailToName.set(d.recruiterEmail, d.recruiterName)
-        );
-        input.cashCollections.forEach((c) =>
-          emailToName.set(c.recruiterEmail, c.recruiterName)
-        );
-        await Promise.all(
-          Array.from(emailToName.entries()).map(([email, name]) =>
-            tx.recruiter.upsert({
-              where: { email },
-              create: { email, name },
-              update: { name },
-            })
-          )
-        );
+      const emailToName = new Map<string, string>();
+      input.deals.forEach((d) =>
+        emailToName.set(d.recruiterEmail, d.recruiterName)
+      );
+      input.cashCollections.forEach((c) =>
+        emailToName.set(c.recruiterEmail, c.recruiterName)
+      );
 
-        if (positiveDeals.length > 0) {
-          await tx.recruiterInvoice.createMany({
-            data: positiveDeals.map((deal) => ({
-              dealId: deal.dealId,
-              dealLink: deal.dealLink,
-              dealName: deal.dealName,
-              amountInvoiced: deal.amountInvoiced,
-              month: deal.month,
-              recruiterEmail: deal.recruiterEmail,
-            })),
+      await Promise.all(
+        Array.from(emailToName.entries()).map(([email, name]) =>
+          ctx.db.recruiter.upsert({
+            where: { email },
+            create: { email, name },
+            update: { name },
+          })
+        )
+      );
+
+      if (positiveDeals.length > 0) {
+        await ctx.db.recruiterInvoice.createMany({
+          data: positiveDeals.map((deal) => ({
+            dealId: deal.dealId,
+            dealLink: deal.dealLink,
+            dealName: deal.dealName,
+            amountInvoiced: deal.amountInvoiced,
+            month: deal.month,
+            recruiterEmail: deal.recruiterEmail,
+          })),
+        });
+      }
+      if (negativeAdjustments.length > 0) {
+        await ctx.db.recruiterInvoice.createMany({
+          data: negativeAdjustments.map((deal) => ({
+            dealId: `${deal.dealId}-${nanoid()}`,
+            dealLink: deal.dealLink,
+            dealName: deal.dealName,
+            amountInvoiced: deal.amountInvoiced,
+            month: deal.month,
+            recruiterEmail: deal.recruiterEmail,
+          })),
+        });
+      }
+      if (input.cashCollections.length > 0) {
+        await ctx.db.recruiterCollection.createMany({
+          data: input.cashCollections.map((cashCollection) => ({
+            amountPaid: cashCollection.amountPaid,
+            month: cashCollection.month,
+            dealId: cashCollection.dealId,
+            recruiterEmail: cashCollection.recruiterEmail,
+          })),
+        });
+      }
+
+      const uniqueRecruiters = Array.from(
+        new Set(input.cashCollections.map((c) => c.recruiterEmail))
+      );
+      for (const recruiter of uniqueRecruiters) {
+        const totalDealsCompleted = input.deals
+          .filter((d) => d.month === month && d.recruiterEmail === recruiter)
+          .reduce((acc, d) => acc + d.amountInvoiced, 0);
+        const totalCashCollected = input.cashCollections
+          .filter((c) => c.month === month && c.recruiterEmail === recruiter)
+          .reduce((acc, c) => acc + c.amountPaid, 0);
+
+        await ctx.db.recruiterMonthlySummary.create({
+          data: {
+            month: month,
+            recruiterEmail: recruiter,
+            totalDealsCompleted: totalDealsCompleted,
+            totalCashCollected: totalCashCollected,
+          },
+        });
+
+        // update threshold status in db
+        if (totalDealsCompleted >= 30000) {
+          await ctx.db.recruiter.update({
+            where: { email: recruiter },
+            data: { has_reached_30k_deals_threshold: true },
           });
         }
-        if (input.cashCollections.length > 0) {
-          await tx.recruiterCollection.createMany({
-            data: input.cashCollections.map((cashCollection) => ({
-              amountPaid: cashCollection.amountPaid,
-              month: cashCollection.month,
-              dealId: cashCollection.dealId,
-              recruiterEmail: cashCollection.recruiterEmail,
-            })),
+
+        const recruiterFromDb = await ctx.db.recruiter.findUnique({
+          where: { email: recruiter },
+        });
+
+        const hasReachedThreshold =
+          recruiterFromDb?.has_reached_30k_deals_threshold;
+
+        await ctx.db.recruiterPayout.create({
+          data: {
+            amount: totalCashCollected * (hasReachedThreshold ? 0.03 : 0.02),
+            commissionRate: hasReachedThreshold ? 0.03 : 0.02,
+            payoutMonth: month,
+            sourceSummaryMonth: month,
+            sourceRecruiterEmail: recruiter,
+          },
+        });
+
+        if (hasReachedThreshold && totalCashCollected > 30000) {
+          const remainder = totalCashCollected - 30000;
+          const bonusAmount = remainder * 0.02;
+          const delayedPayoutMonthString = format(
+            addMonths(parse(month, "yyyy-MM", new Date()), 1),
+            "yyyy-MM"
+          );
+
+          await ctx.db.recruiterPayout.create({
+            data: {
+              amount: bonusAmount,
+              commissionRate: 0.02,
+              payoutMonth: delayedPayoutMonthString,
+              sourceSummaryMonth: month,
+              sourceRecruiterEmail: recruiter,
+            },
           });
-        }
-
-        for (const adjustment of negativeAdjustments) {
-          try {
-            await tx.recruiterInvoice.update({
-              where: { dealId: adjustment.dealId },
-              data: {
-                amountInvoiced: {
-                  decrement: Math.abs(adjustment.amountInvoiced),
-                },
-              },
-            });
-          } catch (error) {
-            continue;
-          }
-        }
-      });
-
-      // --- Massive Recalculation Logic
-      const allRecruiters = await ctx.db.recruiter.findMany({
-        select: { email: true },
-      });
-
-      const startMonth = lastLockedMonth;
-      const endMonth = month;
-
-      const monthsToProcess = [];
-      for (
-        let m = startMonth;
-        m <= endMonth;
-        m = format(addMonths(parse(m, "yyyy-MM", new Date()), 1), "yyyy-MM")
-      ) {
-        monthsToProcess.push(m);
-      }
-
-      for (const rec of allRecruiters) {
-        for (const m of monthsToProcess) {
-          await updateRecruiterMonthlySummary(m, rec.email, ctx);
-        }
-      }
-      for (const rec of allRecruiters) {
-        await syncRecruiterThresholdStatus(rec.email, ctx);
-      }
-      for (const rec of allRecruiters) {
-        for (const m of monthsToProcess) {
-          await calculateRecruiterPayouts(m, rec.email, ctx);
         }
       }
 
@@ -482,141 +512,11 @@ export const recruiterRouter = createTRPCRouter({
       await tx.recruiterPayout.deleteMany({
         where: { payoutMonth: { gte: startMonth } },
       });
+      await tx.recruiter.updateMany({
+        data: { has_reached_30k_deals_threshold: false },
+      });
     });
 
     return { success: true, message: "Data deleted successfully" };
   }),
 });
-
-/**
- * A time-aware function that determines a recruiter's threshold status
- * based on their entire history UP TO a specific month.
- * @returns {Promise<boolean>} - True if the threshold had been met as of that month.
- */
-const getHistoricalThresholdStatus = async (
-  month: string,
-  recruiterEmail: string,
-  ctx: Awaited<ReturnType<typeof createTRPCContext>>
-): Promise<boolean> => {
-  const summaryWithThreshold = await ctx.db.recruiterMonthlySummary.findFirst({
-    where: {
-      recruiterEmail,
-      month: { lte: month }, // <= Look at all history up to and including this month
-      totalDealsCompleted: { gte: 30000 },
-    },
-  });
-  return !!summaryWithThreshold;
-};
-
-const calculateRecruiterPayouts = async (
-  month: string,
-  recruiterEmail: string,
-  ctx: Awaited<ReturnType<typeof createTRPCContext>>
-) => {
-  const summary = await ctx.db.recruiterMonthlySummary.findUnique({
-    where: { recruiterEmail_month: { recruiterEmail, month } },
-  });
-  if (!summary) return;
-
-  // CRITICAL FIX: Determine the status based on the history up to THIS month.
-  const hadReachedThreshold = await getHistoricalThresholdStatus(
-    month,
-    recruiterEmail,
-    ctx
-  );
-
-  const totalCashCollected = summary.totalCashCollected;
-
-  await ctx.db.recruiterPayout.deleteMany({
-    where: { sourceSummaryMonth: month, sourceRecruiterEmail: recruiterEmail },
-  });
-
-  // CORRECTED: Only calculate payouts if the net cash collected is positive.
-  if (totalCashCollected > 0) {
-    const baseRate = hadReachedThreshold ? 0.03 : 0.02;
-
-    await ctx.db.recruiterPayout.create({
-      data: {
-        amount: totalCashCollected * baseRate,
-        commissionRate: baseRate,
-        payoutMonth: month,
-        sourceSummaryMonth: month,
-        sourceRecruiterEmail: recruiterEmail,
-      },
-    });
-
-    // Bonus payout is only possible if the threshold had been met as of this month.
-    if (totalCashCollected > 30000 && hadReachedThreshold) {
-      const remainder = totalCashCollected - 30000;
-      const bonusAmount = remainder * 0.02;
-      const delayedPayoutMonthString = format(
-        addMonths(parse(month, "yyyy-MM", new Date()), 1),
-        "yyyy-MM"
-      );
-
-      await ctx.db.recruiterPayout.create({
-        data: {
-          amount: bonusAmount,
-          commissionRate: 0.02,
-          payoutMonth: delayedPayoutMonthString,
-          sourceSummaryMonth: month,
-          sourceRecruiterEmail: recruiterEmail,
-        },
-      });
-    }
-  }
-};
-
-// This function's job is now ONLY to update the GLOBAL flag on the recruiter's main profile.
-// It is used for displaying their CURRENT overall status, not for historical calculations.
-const syncRecruiterThresholdStatus = async (
-  recruiterEmail: string,
-  ctx: Awaited<ReturnType<typeof createTRPCContext>>
-): Promise<boolean> => {
-  const recruiter = await ctx.db.recruiter.findUnique({
-    where: { email: recruiterEmail },
-  });
-  if (!recruiter) return false;
-
-  const summaryWithThreshold = await ctx.db.recruiterMonthlySummary.findFirst({
-    where: { recruiterEmail, totalDealsCompleted: { gte: 30000 } },
-  });
-  const hasEverReachedThreshold = !!summaryWithThreshold;
-
-  if (recruiter.has_reached_30k_deals_threshold !== hasEverReachedThreshold) {
-    await ctx.db.recruiter.update({
-      where: { email: recruiterEmail },
-      data: { has_reached_30k_deals_threshold: hasEverReachedThreshold },
-    });
-    return true;
-  }
-  return false;
-};
-
-// The other helper function remains the same.
-const updateRecruiterMonthlySummary = async (
-  month: string,
-  recruiterEmail: string,
-  ctx: Awaited<ReturnType<typeof createTRPCContext>>
-) => {
-  // ... (This function is correct and does not need to change)
-  const deals = await ctx.db.recruiterInvoice.findMany({
-    where: { month, recruiterEmail },
-  });
-  const cashCollections = await ctx.db.recruiterCollection.findMany({
-    where: { month, recruiterEmail },
-  });
-  const totalDealsCompleted = deals.reduce(
-    (acc, deal) => acc + deal.amountInvoiced,
-    0
-  );
-  const totalCashCollected = cashCollections.reduce(
-    (acc, cc) => acc + cc.amountPaid,
-    0
-  );
-  await ctx.db.recruiterMonthlySummary.upsert({
-    where: { recruiterEmail_month: { recruiterEmail, month } },
-    create: { month, totalDealsCompleted, totalCashCollected, recruiterEmail },
-    update: { totalDealsCompleted, totalCashCollected },
-  });
-};
