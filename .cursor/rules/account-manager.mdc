@@ -1,0 +1,28 @@
+---
+description: Specs of Account Manager user type
+globs:
+alwaysApply: false
+---
+
+Rules for Account Manager
+
+- This is the most complex one with all kind of variations.
+- First of all it has 2 cases
+
+  - For Americans
+
+    - There is no look back.
+    - We just plus minus all the cash collected for the month apply americanCommissionRate for that user and generate payout for that month
+    - Also if he is the deal owner we take 2% of the cash collection and generate payout for the current month also
+
+  - For non americans
+
+    - This involves a look back
+    - We go row by row for cash collection
+    - We take a cash collection row. lookback when was it invoiced.
+    - Total that specific month invoiced and determine what tier level to use
+      a. if that month invoice is between 0 - tier1Threshold we use tier1CommissionRate. generate a payout of the current month
+
+      b. if the month invoice is between tier1Threshold+1 - tier2Threshold we do point a + use tier2CommissionRate generate a payout for the next month
+
+      c. if the month invoice is greater tier2Threshold+1 we do point a, point b + use tier3CommissionRate and generate a payout for next month
