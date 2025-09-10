@@ -5,3 +5,8 @@ alwaysApply: false
 ---
 
 Rules for Recruitment Manager
+
+- This will be done row by row for cash collection
+- We take a cash collection row. lookback when was it invoiced.
+- Total that specific month invoiced and determine then tier to get commission rate.
+- Do this for all cash collection rows
