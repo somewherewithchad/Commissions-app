@@ -34,6 +34,19 @@ export const accountManagerRouter = createTRPCRouter({
       };
     }),
   // Mutations
+  addMonthlyData: adminProcedure
+    .input(
+      z.object({
+        invoicesFile: z.instanceof(File),
+        collectionsFile: z.instanceof(File),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      return {
+        success: true,
+        message: "Data added successfully",
+      };
+    }),
   addAccountManager: adminProcedure
     .input(
       z.object({
@@ -111,4 +124,10 @@ export const accountManagerRouter = createTRPCRouter({
         message: "Account manager updated successfully",
       };
     }),
+  deleteDataUptoLockedMonth: adminProcedure.mutation(async ({ ctx }) => {
+    return {
+      success: true,
+      message: "Data deleted successfully",
+    };
+  }),
 });

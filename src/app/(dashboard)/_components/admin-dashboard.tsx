@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { parseAsStringEnum, useQueryState } from "nuqs";
 import { userTypes, userTypeToLabel, type UserType } from "@/lib/utils";
 import { AccountExecutiveDataForm } from "@/app/(dashboard)/_components/forms/account-executive-data-form";
+import AccountManagerDataForm from "@/app/(dashboard)/_components/forms/account-manager-data-form";
 
 export function AdminDashboard() {
   const [form, setForm] = useQueryState(
@@ -23,11 +24,11 @@ export function AdminDashboard() {
   const renderForm = (form: UserType) => {
     if (form === "recruiter") {
       return <RecruiterDataForm />;
-    }
-    if (form === "recruitmentManager") {
+    } else if (form === "recruitmentManager") {
       return <RecruitmentManagerDataForm />;
-    }
-    return <AccountExecutiveDataForm />;
+    } else if (form === "accountExecutive") {
+      return <AccountExecutiveDataForm />;
+    } else return <AccountManagerDataForm />;
   };
 
   return (
