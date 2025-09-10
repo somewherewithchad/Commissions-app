@@ -278,112 +278,232 @@ export const accountManagerRouter = createTRPCRouter({
         (i) => i.amountInvoiced < 0
       );
 
-      await ctx.db.$transaction(async (tx) => {
-        await tx.accountManagerInvoice.deleteMany({
-          where: { month: month },
+      await ctx.db.accountManagerInvoice.deleteMany({
+        where: { month: month },
+      });
+      await ctx.db.accountManagerCollection.deleteMany({
+        where: { month: month },
+      });
+
+      const referencedEmails = Array.from(
+        new Set([
+          ...input.invoices.map((i) => i.accountManagerEmail),
+          ...input.collections.map((c) => c.accountManagerEmail),
+        ])
+      );
+
+      if (referencedEmails.length > 0) {
+        const existing = await ctx.db.accountManager.findMany({
+          where: { email: { in: referencedEmails } },
+          select: { email: true },
         });
-        await tx.accountManagerCollection.deleteMany({
-          where: { month: month },
+        const existingSet = new Set(existing.map((e) => e.email));
+        const missing = referencedEmails.filter((e) => !existingSet.has(e));
+        if (missing.length > 0) {
+          throw new Error(
+            `Unknown account managers for this upload: ${missing.join(", ")}`
+          );
+        }
+      }
+
+      if (positiveInvoices.length > 0) {
+        await ctx.db.accountManagerInvoice.createMany({
+          data: positiveInvoices.map((invoice) => ({
+            dealId: invoice.dealId,
+            dealLink: invoice.dealLink,
+            dealName: invoice.dealName,
+            amountInvoiced: invoice.amountInvoiced,
+            month: invoice.month,
+            isDealOwner: invoice.isDealOwner,
+            accountManagerEmail: invoice.accountManagerEmail,
+          })),
+        });
+      }
+
+      if (negativeAdjustments.length > 0) {
+        await ctx.db.accountManagerInvoice.createMany({
+          data: negativeAdjustments.map((adjustment) => ({
+            dealId: `${adjustment.dealId}-${nanoid()}`,
+            dealLink: adjustment.dealLink,
+            dealName: adjustment.dealName,
+            amountInvoiced: adjustment.amountInvoiced,
+            month: adjustment.month,
+            isDealOwner: adjustment.isDealOwner,
+            accountManagerEmail: adjustment.accountManagerEmail,
+          })),
+        });
+      }
+
+      if (input.collections.length > 0) {
+        await ctx.db.accountManagerCollection.createMany({
+          data: input.collections.map((collection) => ({
+            dealId: collection.dealId,
+            amountPaid: collection.amountPaid,
+            month: collection.month,
+            accountManagerEmail: collection.accountManagerEmail,
+          })),
+        });
+      }
+
+      const uniqueAccountManagers = Array.from(
+        new Set(input.collections.map((c) => c.accountManagerEmail))
+      );
+
+      for (const accountManager of uniqueAccountManagers) {
+        const totalInvoiced = input.invoices
+          .filter(
+            (i) => i.month === month && i.accountManagerEmail === accountManager
+          )
+          .reduce((acc, i) => acc + i.amountInvoiced, 0);
+        const totalCollections = input.collections
+          .filter(
+            (c) => c.month === month && c.accountManagerEmail === accountManager
+          )
+          .reduce((acc, c) => acc + c.amountPaid, 0);
+
+        await ctx.db.accountManagerMonthlySummary.create({
+          data: {
+            month: month,
+            accountManagerEmail: accountManager,
+            totalInvoiced: totalInvoiced,
+            totalCollections: totalCollections,
+          },
         });
 
-        // Validate that all referenced account managers exist
-        const referencedEmails = Array.from(
-          new Set([
-            ...input.invoices.map((i) => i.accountManagerEmail),
-            ...input.collections.map((c) => c.accountManagerEmail),
-          ])
-        );
-        if (referencedEmails.length > 0) {
-          const existing = await tx.accountManager.findMany({
-            where: { email: { in: referencedEmails } },
-            select: { email: true },
-          });
-          const existingSet = new Set(existing.map((e) => e.email));
-          const missing = referencedEmails.filter((e) => !existingSet.has(e));
-          if (missing.length > 0) {
-            throw new Error(
-              `Unknown account managers for this upload: ${missing.join(", ")}`
-            );
-          }
+        // Calculate payouts (procedural, no Sets; allow negative payouts)
+        const managerConfig = await ctx.db.accountManager.findUnique({
+          where: { email: accountManager },
+        });
+        if (!managerConfig) {
+          continue;
         }
 
-        if (positiveInvoices.length > 0) {
-          await tx.accountManagerInvoice.createMany({
-            data: positiveInvoices.map((invoice) => ({
-              dealId: invoice.dealId,
-              dealLink: invoice.dealLink,
-              dealName: invoice.dealName,
-              amountInvoiced: invoice.amountInvoiced,
-              month: invoice.month,
-              isDealOwner: invoice.isDealOwner,
-              accountManagerEmail: invoice.accountManagerEmail,
-            })),
-          });
-        }
-        if (negativeAdjustments.length > 0) {
-          await tx.accountManagerInvoice.createMany({
-            data: negativeAdjustments.map((adjustment) => ({
-              dealId: `${adjustment.dealId}-${nanoid()}`,
-              dealLink: adjustment.dealLink,
-              dealName: adjustment.dealName,
-              amountInvoiced: adjustment.amountInvoiced,
-              month: adjustment.month,
-              isDealOwner: adjustment.isDealOwner,
-              accountManagerEmail: adjustment.accountManagerEmail,
-            })),
-          });
-        }
-        if (input.collections.length > 0) {
-          await tx.accountManagerCollection.createMany({
-            data: input.collections.map((collection) => ({
-              dealId: collection.dealId,
-              amountPaid: collection.amountPaid,
-              month: collection.month,
-              accountManagerEmail: collection.accountManagerEmail,
-            })),
-          });
-        }
+        const collections = await ctx.db.accountManagerCollection.findMany({
+          where: { accountManagerEmail: accountManager, month },
+        });
 
-        for (const adjustment of negativeAdjustments) {
-          try {
-            await tx.accountManagerInvoice.update({
-              where: { dealId: adjustment.dealId },
+        if (managerConfig.isAmerican) {
+          // Base monthly payout at americanCommissionRate applied to totalCollections (can be negative)
+          const baseRate = managerConfig.americanCommissionRate ?? 0;
+          if (baseRate !== 0 && totalCollections !== 0) {
+            await ctx.db.accountManagerPayout.create({
               data: {
-                amountInvoiced: {
-                  decrement: Math.abs(adjustment.amountInvoiced),
-                },
+                amount: totalCollections * baseRate,
+                commissionRate: baseRate,
+                payoutMonth: month,
+                sourceSummaryMonth: month,
+                sourceAccountManagerEmail: accountManager,
               },
             });
-          } catch (error) {
-            continue;
           }
-        }
-      });
 
-      // Recalculate summaries and payouts from locked month to the uploaded month for ALL managers
-      const allManagers = await ctx.db.accountManager.findMany({
-        select: { email: true },
-      });
+          // Deal owner bonus: 2% of each collection row in current month
+          for (let i = 0; i < collections.length; i++) {
+            const col = collections[i]!;
+            const inv = await ctx.db.accountManagerInvoice.findFirst({
+              where: {
+                accountManagerEmail: accountManager,
+                dealId: col.dealId,
+              },
+              select: { isDealOwner: true },
+            });
+            if (inv && inv.isDealOwner) {
+              await ctx.db.accountManagerPayout.create({
+                data: {
+                  amount: col.amountPaid * 0.02,
+                  commissionRate: 0.02,
+                  payoutMonth: month,
+                  sourceSummaryMonth: month,
+                  sourceAccountManagerEmail: accountManager,
+                  isDealOwnerBonus: true,
+                },
+              });
+            }
+          }
+        } else {
+          // Non-American: row-by-row using invoice-month totals to determine tiers
+          const nextMonth = format(
+            addMonths(parse(month, "yyyy-MM", new Date()), 1),
+            "yyyy-MM"
+          );
+          const tier1Rate = managerConfig.tier1CommissionRate ?? 0;
+          const tier2Rate = managerConfig.tier2CommissionRate ?? 0;
+          const tier3Rate = managerConfig.tier3CommissionRate ?? 0;
+          const tier1Threshold =
+            managerConfig.tier1Threshold ?? Number.POSITIVE_INFINITY;
+          const tier2Threshold =
+            managerConfig.tier2Threshold ?? Number.POSITIVE_INFINITY;
 
-      const startMonth = lastLockedMonth;
-      const endMonth = month as string;
-      const monthsToProcess: string[] = [];
-      for (
-        let m = startMonth;
-        m <= endMonth;
-        m = format(addMonths(parse(m, "yyyy-MM", new Date()), 1), "yyyy-MM")
-      ) {
-        monthsToProcess.push(m);
-      }
+          for (let i = 0; i < collections.length; i++) {
+            const col = collections[i]!;
 
-      for (const manager of allManagers) {
-        for (const m of monthsToProcess) {
-          await updateAccountManagerMonthlySummary(m, manager.email, ctx);
-        }
-      }
-      for (const manager of allManagers) {
-        for (const m of monthsToProcess) {
-          await calculateAccountManagerPayouts(m, manager.email, ctx);
+            // Find invoice month for this deal
+            const invoice = await ctx.db.accountManagerInvoice.findFirst({
+              where: {
+                accountManagerEmail: accountManager,
+                dealId: col.dealId,
+              },
+              select: { month: true },
+            });
+
+            // Determine total invoiced for that invoice month (0 if not found)
+            let totalInvoicedForInvoiceMonth = 0;
+            if (invoice && invoice.month) {
+              const agg = await ctx.db.accountManagerInvoice.aggregate({
+                _sum: { amountInvoiced: true },
+                where: {
+                  accountManagerEmail: accountManager,
+                  month: invoice.month,
+                },
+              });
+              totalInvoicedForInvoiceMonth = agg._sum.amountInvoiced ?? 0;
+            }
+
+            // Point (a): always pay tier1 in current month
+            if (tier1Rate !== 0) {
+              await ctx.db.accountManagerPayout.create({
+                data: {
+                  amount: col.amountPaid * tier1Rate,
+                  commissionRate: tier1Rate,
+                  payoutMonth: month,
+                  sourceSummaryMonth: month,
+                  sourceAccountManagerEmail: accountManager,
+                },
+              });
+            }
+
+            // Point (b): if > tier1Threshold and <= tier2Threshold, add tier2 next month
+            if (
+              totalInvoicedForInvoiceMonth > tier1Threshold &&
+              tier2Rate !== 0
+            ) {
+              await ctx.db.accountManagerPayout.create({
+                data: {
+                  amount: col.amountPaid * tier2Rate,
+                  commissionRate: tier2Rate,
+                  payoutMonth: nextMonth,
+                  sourceSummaryMonth: month,
+                  sourceAccountManagerEmail: accountManager,
+                },
+              });
+            }
+
+            // Point (c): if > tier2Threshold, also add tier3 next month
+            if (
+              totalInvoicedForInvoiceMonth > tier2Threshold &&
+              tier3Rate !== 0
+            ) {
+              await ctx.db.accountManagerPayout.create({
+                data: {
+                  amount: col.amountPaid * tier3Rate,
+                  commissionRate: tier3Rate,
+                  payoutMonth: nextMonth,
+                  sourceSummaryMonth: month,
+                  sourceAccountManagerEmail: accountManager,
+                },
+              });
+            }
+          }
         }
       }
 
@@ -493,184 +613,3 @@ export const accountManagerRouter = createTRPCRouter({
     };
   }),
 });
-
-const updateAccountManagerMonthlySummary = async (
-  month: string,
-  accountManagerEmail: string,
-  ctx: Awaited<ReturnType<typeof createTRPCContext>>
-) => {
-  const invoiceAgg = await ctx.db.accountManagerInvoice.aggregate({
-    _sum: { amountInvoiced: true },
-    where: { accountManagerEmail, month },
-  });
-  const collectionAgg = await ctx.db.accountManagerCollection.aggregate({
-    _sum: { amountPaid: true },
-    where: { accountManagerEmail, month },
-  });
-
-  const totalInvoiced = invoiceAgg._sum.amountInvoiced ?? 0;
-  const totalCollections = collectionAgg._sum.amountPaid ?? 0;
-
-  await ctx.db.accountManagerMonthlySummary.upsert({
-    where: { accountManagerEmail_month: { accountManagerEmail, month } },
-    create: { month, accountManagerEmail, totalInvoiced, totalCollections },
-    update: { totalInvoiced, totalCollections },
-  });
-};
-
-const calculateAccountManagerPayouts = async (
-  month: string,
-  accountManagerEmail: string,
-  ctx: Awaited<ReturnType<typeof createTRPCContext>>
-) => {
-  // Clear existing payouts for this source month
-  await ctx.db.accountManagerPayout.deleteMany({
-    where: {
-      sourceAccountManagerEmail: accountManagerEmail,
-      sourceSummaryMonth: month,
-    },
-  });
-
-  const manager = await ctx.db.accountManager.findUnique({
-    where: { email: accountManagerEmail },
-  });
-  if (!manager) return;
-
-  const collections = await ctx.db.accountManagerCollection.findMany({
-    where: { accountManagerEmail, month },
-  });
-  if (collections.length === 0) return;
-
-  const dealIds = [...new Set(collections.map((c) => c.dealId))];
-  const invoices = await ctx.db.accountManagerInvoice.findMany({
-    where: { dealId: { in: dealIds }, accountManagerEmail },
-  });
-  const dealIdToInvoice = new Map(invoices.map((inv) => [inv.dealId, inv]));
-
-  // Prefetch monthly summaries for invoice months to determine tiers for non-Americans
-  const invoiceMonths = [...new Set(invoices.map((inv) => inv.month))];
-  const monthlySummaries = await ctx.db.accountManagerMonthlySummary.findMany({
-    where: { accountManagerEmail, month: { in: invoiceMonths } },
-  });
-  const monthToInvoiceTotal = new Map(
-    monthlySummaries.map((s) => [s.month, s.totalInvoiced])
-  );
-
-  const delayedPayoutMonth = (m: string) =>
-    format(addMonths(parse(m, "yyyy-MM", new Date()), 1), "yyyy-MM");
-
-  for (const c of collections) {
-    const inv = dealIdToInvoice.get(c.dealId);
-    if (!inv) continue;
-
-    const isDealOwner = !!inv.isDealOwner;
-
-    if (manager.isAmerican) {
-      const baseRate = manager.americanCommissionRate ?? 0;
-      if (c.amountPaid > 0 && baseRate > 0) {
-        await ctx.db.accountManagerPayout.create({
-          data: {
-            amount: c.amountPaid * baseRate,
-            commissionRate: baseRate,
-            payoutMonth: month,
-            sourceSummaryMonth: month,
-            sourceAccountManagerEmail: accountManagerEmail,
-            isDealOwnerBonus: false,
-          },
-        });
-      }
-      if (isDealOwner && c.amountPaid > 0) {
-        await ctx.db.accountManagerPayout.create({
-          data: {
-            amount: c.amountPaid * 0.02,
-            commissionRate: 0.02,
-            payoutMonth: month,
-            sourceSummaryMonth: month,
-            sourceAccountManagerEmail: accountManagerEmail,
-            isDealOwnerBonus: true,
-          },
-        });
-      }
-    } else {
-      const totalInvForInvoiceMonth = monthToInvoiceTotal.get(inv.month) ?? 0;
-
-      const tier1Rate = manager.tier1CommissionRate ?? 0;
-      const tier2Rate = manager.tier2CommissionRate ?? 0;
-      const tier3Rate = manager.tier3CommissionRate ?? 0;
-
-      const t1 = manager.tier1Threshold ?? 0;
-      const t2 = manager.tier2Threshold ?? 0;
-
-      // Base: always pay tier1 in current month
-      if (c.amountPaid > 0 && tier1Rate > 0) {
-        await ctx.db.accountManagerPayout.create({
-          data: {
-            amount: c.amountPaid * tier1Rate,
-            commissionRate: tier1Rate,
-            payoutMonth: month,
-            sourceSummaryMonth: month,
-            sourceAccountManagerEmail: accountManagerEmail,
-            isDealOwnerBonus: false,
-          },
-        });
-      }
-      // Deal owner bonus on top, current month
-      if (isDealOwner && c.amountPaid > 0) {
-        await ctx.db.accountManagerPayout.create({
-          data: {
-            amount: c.amountPaid * 0.01,
-            commissionRate: 0.01,
-            payoutMonth: month,
-            sourceSummaryMonth: month,
-            sourceAccountManagerEmail: accountManagerEmail,
-            isDealOwnerBonus: true,
-          },
-        });
-      }
-
-      // If invoice-month totals cross higher thresholds, pay additional tiers next month
-      if (totalInvForInvoiceMonth >= t1 && totalInvForInvoiceMonth < t2) {
-        if (c.amountPaid > 0 && tier2Rate > 0) {
-          await ctx.db.accountManagerPayout.create({
-            data: {
-              amount: c.amountPaid * tier2Rate,
-              commissionRate: tier2Rate,
-              payoutMonth: delayedPayoutMonth(month),
-              sourceSummaryMonth: month,
-              sourceAccountManagerEmail: accountManagerEmail,
-              isDealOwnerBonus: false,
-            },
-          });
-        }
-      }
-      if (totalInvForInvoiceMonth >= t2) {
-        if (c.amountPaid > 0) {
-          if (tier2Rate > 0) {
-            await ctx.db.accountManagerPayout.create({
-              data: {
-                amount: c.amountPaid * tier2Rate,
-                commissionRate: tier2Rate,
-                payoutMonth: delayedPayoutMonth(month),
-                sourceSummaryMonth: month,
-                sourceAccountManagerEmail: accountManagerEmail,
-                isDealOwnerBonus: false,
-              },
-            });
-          }
-          if (tier3Rate > 0) {
-            await ctx.db.accountManagerPayout.create({
-              data: {
-                amount: c.amountPaid * tier3Rate,
-                commissionRate: tier3Rate,
-                payoutMonth: delayedPayoutMonth(month),
-                sourceSummaryMonth: month,
-                sourceAccountManagerEmail: accountManagerEmail,
-                isDealOwnerBonus: false,
-              },
-            });
-          }
-        }
-      }
-    }
-  }
-};
