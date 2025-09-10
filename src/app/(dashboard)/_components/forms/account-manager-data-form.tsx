@@ -168,7 +168,24 @@ export default function AccountManagerDataForm() {
         return;
       }
 
-      // make api call here
+      // addMonthlyData.mutate({
+      //   invoices: invoiceRows.map((invoice) => ({
+      //     dealId: invoice["Deal ID"],
+      //     dealLink: invoice["Deal link"],
+      //     dealName: invoice["Deal name"],
+      //     executiveName: invoice["Account Executive Name"],
+      //     executiveEmail: invoice["Account Executive Email"].toLowerCase(),
+      //     amountInvoiced: Number(invoice["Amount invoiced"].replace(/,/g, "")),
+      //     month: convertToYearMonth(canonicalMonth),
+      //   })),
+      //   collections: collectionRows.map((collection) => ({
+      //     dealId: collection["Deal ID"],
+      //     executiveName: collection["Account Executive Name"],
+      //     executiveEmail: collection["Account Executive Email"].toLowerCase(),
+      //     amountPaid: Number(collection["Amount paid"].replace(/,/g, "")),
+      //     month: convertToYearMonth(canonicalMonth),
+      //   })),
+      // });
     } catch (err) {
       console.error(err);
     }

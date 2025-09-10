@@ -244,10 +244,33 @@ model AccountManager {
   tier3CommissionRate    Float
   tier3Threshold         Float
 
-  // invoices         AccountManagerInvoice[]
-  // collections      AccountManagerCollection[]
+  invoices    AccountManagerInvoice[]
+  collections AccountManagerCollection[]
   // monthlySummaries AccountManagerMonthlySummary[]
   // payouts          AccountManagerPayout[]
+}
+
+model AccountManagerInvoice {
+  id             String  @id @default(cuid())
+  dealId         String  @unique
+  dealLink       String?
+  dealName       String
+  amountInvoiced Float
+  month          String
+  isDealOwner    Boolean
+
+  accountManager      AccountManager @relation(fields: [accountManagerEmail], references: [email])
+  accountManagerEmail String
+}
+
+model AccountManagerCollection {
+  id         String @id @default(cuid())
+  amountPaid Float
+  month      String
+  dealId     String
+
+  accountManager      AccountManager @relation(fields: [accountManagerEmail], references: [email])
+  accountManagerEmail String
 }
 
 model Session {
