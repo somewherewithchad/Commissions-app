@@ -9,4 +9,10 @@ Rules for Recruitment Manager
 - This will be done row by row for cash collection
 - We take a cash collection row. lookback when was it invoiced.
 - Total that specific month invoiced and determine then tier to get commission rate.
+  a. if that month invoices is 0-99999 we take 1% of the cash collected row and generate a payout this month
+
+  b. if between 100,000-149999 we do the point a + also take 0.25% of cash collected row and generate a payout for next month
+
+  c. if above 150000 we do point a. + also take 0.5% of cash collected row and generate a payout for next month
+
 - Do this for all cash collection rows

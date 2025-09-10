@@ -607,10 +607,79 @@ export const recruitmentManagerRouter = createTRPCRouter({
           },
         });
 
-        // Need to calculate payouts
-        // The logic works something like this we take a cash collection row. lookback when was it invoiced.
-        // Total that specific month invoiced and determine then tier to get commission rate.
-        // Do this for all cash collection rows
+        // Calculate payouts
+        // For each collection row in month M:
+        //  - Pay 1% in month M (base)
+        //  - Look up the invoice month of that deal; check the total invoiced in that invoice month.
+        //    - If total invoiced for that invoice month is 100,000–149,999: pay additional 0.25% next month
+        //    - If total invoiced for that invoice month is >= 150,000: pay additional 0.5% next month
+        const collections = await ctx.db.recruitmentManagerCollection.findMany({
+          where: { managerEmail: recruitmentManager, month },
+        });
+        if (collections.length > 0) {
+          const nextMonth = format(
+            addMonths(parse(month, "yyyy-MM", new Date()), 1),
+            "yyyy-MM"
+          );
+
+          for (const collection of collections) {
+            // Base payout: 1% in the same month (can be negative or zero)
+            await ctx.db.recruitmentManagerPayout.create({
+              data: {
+                amount: collection.amountPaid * 0.01,
+                payoutMonth: month,
+                sourceSummaryMonth: month,
+                sourceManagerEmail: recruitmentManager,
+              },
+            });
+
+            // Find the invoice for this deal to get the invoice month
+            const invoice = await ctx.db.recruitmentManagerInvoice.findFirst({
+              where: {
+                managerEmail: recruitmentManager,
+                dealId: collection.dealId,
+              },
+              select: { month: true },
+            });
+            if (!invoice) continue;
+
+            // Total invoiced for that invoice month
+            const invoiceTotals =
+              await ctx.db.recruitmentManagerInvoice.aggregate({
+                _sum: { amountInvoiced: true },
+                where: {
+                  managerEmail: recruitmentManager,
+                  month: invoice.month,
+                },
+              });
+            const totalInvoicedForInvoiceMonth =
+              invoiceTotals._sum.amountInvoiced ?? 0;
+
+            // Bonus next month based on invoice-month total
+            if (
+              totalInvoicedForInvoiceMonth >= 100000 &&
+              totalInvoicedForInvoiceMonth < 150000
+            ) {
+              await ctx.db.recruitmentManagerPayout.create({
+                data: {
+                  amount: collection.amountPaid * 0.0025,
+                  payoutMonth: nextMonth,
+                  sourceSummaryMonth: month,
+                  sourceManagerEmail: recruitmentManager,
+                },
+              });
+            } else if (totalInvoicedForInvoiceMonth >= 150000) {
+              await ctx.db.recruitmentManagerPayout.create({
+                data: {
+                  amount: collection.amountPaid * 0.005,
+                  payoutMonth: nextMonth,
+                  sourceSummaryMonth: month,
+                  sourceManagerEmail: recruitmentManager,
+                },
+              });
+            }
+          }
+        }
       }
 
       return {
