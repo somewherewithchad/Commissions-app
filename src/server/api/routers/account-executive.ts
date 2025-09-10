@@ -1,3 +1,4 @@
+import { lastLockedMonth } from "@/lib/utils";
 import {
   createTRPCRouter,
   protectedProcedure,
@@ -203,6 +204,15 @@ export const accountExecutiveRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ input, ctx }) => {
+      const existingData = await ctx.db.accountExecutiveInvoice.findMany({
+        where: {
+          month: { in: input.invoices.map((i) => i.month) },
+        },
+      });
+      if (existingData.length > 0) {
+        throw new Error("Data for this month has already been uploaded.");
+      }
+
       const allMonths = new Set([
         ...input.invoices.map((i) => i.month),
         ...input.collections.map((c) => c.month),
@@ -473,6 +483,26 @@ export const accountExecutiveRouter = createTRPCRouter({
         message: "Account executive updated successfully",
       };
     }),
+  deleteDataUptoLockedMonth: adminProcedure.mutation(async ({ ctx }) => {
+    const startMonth = lastLockedMonth;
+
+    await ctx.db.$transaction(async (tx) => {
+      await tx.accountExecutiveInvoice.deleteMany({
+        where: { month: { gte: startMonth } },
+      });
+      await tx.accountExecutiveCollection.deleteMany({
+        where: { month: { gte: startMonth } },
+      });
+      await tx.accountExecutiveMonthlySummary.deleteMany({
+        where: { month: { gte: startMonth } },
+      });
+      await tx.accountExecutivePayout.deleteMany({
+        where: { payoutMonth: { gte: startMonth } },
+      });
+    });
+
+    return { success: true, message: "Data deleted successfully" };
+  }),
 });
 
 const updateAccountExecutiveMonthlySummary = async (

@@ -75,6 +75,17 @@ export function RecruitmentManagerDataForm() {
     },
   });
 
+  const deleteDataUptoLockedMonth =
+    api.recruitmentManager.deleteDataUptoLockedMonth.useMutation({
+      onSuccess: (res) => {
+        toast.success(res.message);
+      },
+      onError: (err) => {
+        console.error(err);
+        toast.error(err.message);
+      },
+    });
+
   function ensureSameMonthOrReset(
     which: "invoice" | "collection",
     currentToken: string | null,
@@ -294,9 +305,17 @@ export function RecruitmentManagerDataForm() {
               </p>
             </div>
 
-            <CardFooter className="px-0">
+            <CardFooter className="px-0 flex gap-2">
               <Button type="submit" disabled={addMonthlyData.isPending}>
                 {addMonthlyData.isPending ? "Uploading..." : "Submit"}
+              </Button>
+              <Button
+                variant="destructive"
+                type="button"
+                disabled={deleteDataUptoLockedMonth.isPending}
+                onClick={() => deleteDataUptoLockedMonth.mutate()}
+              >
+                Delete
               </Button>
             </CardFooter>
           </form>

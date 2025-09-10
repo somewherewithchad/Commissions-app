@@ -197,3 +197,5 @@ export function userTypeToLabel(type: string) {
   if (type === "accountManager") return "Account Manager";
   return type;
 }
+
+export const lastLockedMonth = "2025-04";

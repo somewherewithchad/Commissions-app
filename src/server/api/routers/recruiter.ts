@@ -8,6 +8,7 @@ import { protectedProcedure, publicProcedure } from "@/server/api/trpc";
 import { addMonths, format, parse, subMonths } from "date-fns";
 import { Prisma } from "@prisma/client";
 import { createOrderByClause, sortSchema } from "@/lib/sorting";
+import { lastLockedMonth } from "@/lib/utils";
 
 export const recruiterRouter = createTRPCRouter({
   // Queries
@@ -340,6 +341,15 @@ export const recruiterRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ input, ctx }) => {
+      const existingData = await ctx.db.recruiterInvoice.findMany({
+        where: {
+          month: { in: input.deals.map((d) => d.month) },
+        },
+      });
+      if (existingData.length > 0) {
+        throw new Error("Data for this month has already been uploaded.");
+      }
+
       const allMonths = new Set([
         ...input.deals.map((d) => d.month),
         ...input.cashCollections.map((c) => c.month),
@@ -362,7 +372,6 @@ export const recruiterRouter = createTRPCRouter({
       const negativeAdjustments = input.deals.filter(
         (d) => d.amountInvoiced < 0
       );
-      let recalculationStartMonth = month;
 
       await ctx.db.$transaction(async (tx) => {
         await tx.recruiterInvoice.deleteMany({ where: { month: month } });
@@ -429,30 +438,17 @@ export const recruiterRouter = createTRPCRouter({
         select: { email: true },
       });
 
-      const monthsToProcess = [
-        "2025-03",
-        "2025-04",
-        "2025-05",
-        "2025-06",
-        "2025-07",
-        "2025-08",
-        "2025-09",
-        "2025-10",
-        "2025-11",
-        "2025-12",
-        "2026-01",
-        "2026-02",
-        "2026-03",
-        "2026-04",
-        "2026-05",
-        "2026-06",
-        "2026-07",
-        "2026-08",
-        "2026-09",
-        "2026-10",
-        "2026-11",
-        "2026-12",
-      ].sort();
+      const startMonth = lastLockedMonth;
+      const endMonth = month;
+
+      const monthsToProcess = [];
+      for (
+        let m = startMonth;
+        m <= endMonth;
+        m = format(addMonths(parse(m, "yyyy-MM", new Date()), 1), "yyyy-MM")
+      ) {
+        monthsToProcess.push(m);
+      }
 
       for (const rec of allRecruiters) {
         for (const m of monthsToProcess) {
@@ -470,6 +466,26 @@ export const recruiterRouter = createTRPCRouter({
 
       return { success: true, message: "Monthly data processed successfully" };
     }),
+  deleteDataUptoLockedMonth: adminProcedure.mutation(async ({ ctx }) => {
+    const startMonth = lastLockedMonth;
+
+    await ctx.db.$transaction(async (tx) => {
+      await tx.recruiterInvoice.deleteMany({
+        where: { month: { gte: startMonth } },
+      });
+      await tx.recruiterCollection.deleteMany({
+        where: { month: { gte: startMonth } },
+      });
+      await tx.recruiterMonthlySummary.deleteMany({
+        where: { month: { gte: startMonth } },
+      });
+      await tx.recruiterPayout.deleteMany({
+        where: { payoutMonth: { gte: startMonth } },
+      });
+    });
+
+    return { success: true, message: "Data deleted successfully" };
+  }),
 });
 
 /**
