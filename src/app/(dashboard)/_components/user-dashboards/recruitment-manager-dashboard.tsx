@@ -29,6 +29,13 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { ExternalLink } from "lucide-react";
 
 export function RecruitmentManagerDashboard() {
   const [year, setYear] = React.useState("2025");
@@ -65,6 +72,9 @@ export function RecruitmentManagerDashboard() {
           </div>
         </CardHeader>
         <CardContent>
+          <div className="mb-2 text-xs text-muted-foreground">
+            Tip: Click any month header to view payout details.
+          </div>
           {isLoading && (
             <div className="text-sm text-muted-foreground">Loading...</div>
           )}
@@ -87,18 +97,32 @@ export function RecruitmentManagerDashboard() {
                             !open && setSelectedMonth(null)
                           }
                         >
-                          <DialogTrigger asChild>
-                            <Button
-                              variant="link"
-                              className="h-auto p-0 text-foreground"
-                              onClick={() => setSelectedMonth(m.month)}
-                            >
-                              {format(
-                                parse(m.month, "yyyy-MM", new Date()),
-                                "MMMM yyyy"
-                              )}
-                            </Button>
-                          </DialogTrigger>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <DialogTrigger asChild>
+                                  <Button
+                                    variant="link"
+                                    className="h-auto p-0 text-foreground inline-flex items-center gap-1 underline underline-offset-4"
+                                    onClick={() => setSelectedMonth(m.month)}
+                                    aria-label={`View details for ${format(
+                                      parse(m.month, "yyyy-MM", new Date()),
+                                      "MMMM yyyy"
+                                    )}`}
+                                  >
+                                    {format(
+                                      parse(m.month, "yyyy-MM", new Date()),
+                                      "MMMM yyyy"
+                                    )}
+                                    <ExternalLink className="h-3 w-3 opacity-70" />
+                                  </Button>
+                                </DialogTrigger>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                View payout details
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                           <DialogContent className="w-[95vw] !max-w-4xl max-h-[85vh] overflow-hidden">
                             <DialogHeader>
                               <DialogTitle>
