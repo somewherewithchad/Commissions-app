@@ -168,87 +168,123 @@ export function RecruiterDashboard() {
                                             </Badge>
                                           </CardHeader>
                                           <CardContent>
-                                            <div className="text-sm text-muted-foreground mb-2">
-                                              This payout was calculated from
-                                              cash collected in{" "}
-                                              <strong>
-                                                {format(
-                                                  parse(
-                                                    payout.sourceSummaryMonth,
-                                                    "yyyy-MM",
-                                                    new Date()
-                                                  ),
-                                                  "MMMM yyyy"
+                                            {isDelayedBonus ? (
+                                              <>
+                                                {payout.description ? (
+                                                  <div className="text-sm text-muted-foreground">
+                                                    <span className="">
+                                                      This payout was calculated
+                                                      from cash collected in{" "}
+                                                      <strong>
+                                                        {format(
+                                                          parse(
+                                                            payout.sourceSummaryMonth,
+                                                            "yyyy-MM",
+                                                            new Date()
+                                                          ),
+                                                          "MMMM yyyy"
+                                                        )}
+                                                      </strong>
+                                                    </span>
+                                                    <br />
+                                                    {payout.description}
+                                                  </div>
+                                                ) : (
+                                                  <div className="text-sm text-muted-foreground">
+                                                    Bonus payout
+                                                  </div>
                                                 )}
-                                              </strong>
-                                              .
-                                            </div>
-                                            <div className="rounded-md border">
-                                              <Table>
-                                                <TableHeader>
-                                                  <TableRow>
-                                                    <TableHead>
-                                                      Deal ID
-                                                    </TableHead>
-                                                    <TableHead>
-                                                      Deal Name
-                                                    </TableHead>
-                                                    <TableHead className="text-right">
-                                                      Cash Collected
-                                                    </TableHead>
-                                                    <TableHead className="text-right">
-                                                      Rate
-                                                    </TableHead>
-                                                    <TableHead className="text-right">
-                                                      Commission
-                                                    </TableHead>
-                                                  </TableRow>
-                                                </TableHeader>
-                                                <TableBody>
-                                                  {payout.sourceCashCollections &&
-                                                  payout.sourceCashCollections
-                                                    .length > 0 ? (
-                                                    payout.sourceCashCollections.map(
-                                                      (c: any) => (
-                                                        <TableRow key={c.id}>
-                                                          <TableCell className="font-medium">
-                                                            {c.dealId}
-                                                          </TableCell>
-                                                          <TableCell>
-                                                            {c.dealName ?? "—"}
-                                                          </TableCell>
-                                                          <TableCell className="text-right">
-                                                            {formatCurrency(
-                                                              c.amountPaid
-                                                            )}
-                                                          </TableCell>
-                                                          <TableCell className="text-right">
-                                                            {ratePercent}%
-                                                          </TableCell>
-                                                          <TableCell className="text-right">
-                                                            {formatCurrency(
-                                                              c.amountPaid *
-                                                                payout.commissionRate
-                                                            )}
+                                              </>
+                                            ) : (
+                                              <>
+                                                <div className="text-sm text-muted-foreground mb-2">
+                                                  This payout was calculated
+                                                  from cash collected in{" "}
+                                                  <strong>
+                                                    {format(
+                                                      parse(
+                                                        payout.sourceSummaryMonth,
+                                                        "yyyy-MM",
+                                                        new Date()
+                                                      ),
+                                                      "MMMM yyyy"
+                                                    )}
+                                                  </strong>
+                                                  .
+                                                </div>
+                                                <div className="rounded-md border">
+                                                  <Table>
+                                                    <TableHeader>
+                                                      <TableRow>
+                                                        <TableHead>
+                                                          Deal ID
+                                                        </TableHead>
+                                                        <TableHead>
+                                                          Deal Name
+                                                        </TableHead>
+                                                        <TableHead className="text-right">
+                                                          Cash Collected
+                                                        </TableHead>
+                                                        <TableHead className="text-right">
+                                                          Rate
+                                                        </TableHead>
+                                                        <TableHead className="text-right">
+                                                          Commission
+                                                        </TableHead>
+                                                      </TableRow>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                      {payout.sourceCashCollections &&
+                                                      payout
+                                                        .sourceCashCollections
+                                                        .length > 0 ? (
+                                                        payout.sourceCashCollections.map(
+                                                          (c: any) => (
+                                                            <TableRow
+                                                              key={c.id}
+                                                            >
+                                                              <TableCell className="font-medium">
+                                                                {c.dealId}
+                                                              </TableCell>
+                                                              <TableCell>
+                                                                {c.dealName ??
+                                                                  "—"}
+                                                              </TableCell>
+                                                              <TableCell className="text-right">
+                                                                {formatCurrency(
+                                                                  c.amountPaid
+                                                                )}
+                                                              </TableCell>
+                                                              <TableCell className="text-right">
+                                                                {ratePercent}%
+                                                              </TableCell>
+                                                              <TableCell className="text-right">
+                                                                {formatCurrency(
+                                                                  c.amountPaid *
+                                                                    payout.commissionRate
+                                                                )}
+                                                              </TableCell>
+                                                            </TableRow>
+                                                          )
+                                                        )
+                                                      ) : (
+                                                        <TableRow>
+                                                          <TableCell
+                                                            colSpan={5}
+                                                            className="text-sm text-muted-foreground"
+                                                          >
+                                                            Could not identify
+                                                            the exact source
+                                                            collections for this
+                                                            payout.
                                                           </TableCell>
                                                         </TableRow>
-                                                      )
-                                                    )
-                                                  ) : (
-                                                    <TableRow>
-                                                      <TableCell
-                                                        colSpan={5}
-                                                        className="text-sm text-muted-foreground"
-                                                      >
-                                                        Could not identify the
-                                                        exact source collections
-                                                        for this payout.
-                                                      </TableCell>
-                                                    </TableRow>
-                                                  )}
-                                                </TableBody>
-                                              </Table>
-                                            </div>
+                                                      )}
+                                                    </TableBody>
+                                                  </Table>
+                                                </div>
+                                              </>
+                                            )}
                                           </CardContent>
                                         </Card>
                                       );

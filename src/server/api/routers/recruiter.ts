@@ -2,7 +2,7 @@ import { createTRPCRouter, adminProcedure } from "@/server/api/trpc";
 import { z } from "zod";
 import { protectedProcedure, publicProcedure } from "@/server/api/trpc";
 import { addMonths, format, parse, subMonths } from "date-fns";
-import { lastLockedMonth } from "@/lib/utils";
+import { formatCurrency, lastLockedMonth } from "@/lib/utils";
 import { customAlphabet } from "nanoid";
 const nanoid = customAlphabet("1234567890abcdefghijklmnopqrstuvwxyz", 6);
 
@@ -484,6 +484,11 @@ export const recruiterRouter = createTRPCRouter({
               payoutMonth: delayedPayoutMonthString,
               sourceSummaryMonth: month,
               sourceRecruiterEmail: recruiter,
+              description: `${formatCurrency(
+                totalCashCollected
+              )} - $30,000 = ${formatCurrency(
+                remainder
+              )} * 2% = ${formatCurrency(bonusAmount)}`,
             },
           });
         }

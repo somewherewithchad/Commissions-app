@@ -164,82 +164,119 @@ export function RecruiterPayouts({ selected }: { selected: Date | null }) {
                                       </Badge>
                                     </CardHeader>
                                     <CardContent>
-                                      <div className="text-sm text-muted-foreground mb-2">
-                                        This payout was calculated from cash
-                                        collected in{" "}
-                                        <strong>
-                                          {format(
-                                            parse(
-                                              p.sourceSummaryMonth,
-                                              "yyyy-MM",
-                                              new Date()
-                                            ),
-                                            "MMMM yyyy"
+                                      {isDelayedBonus ? (
+                                        <>
+                                          {p.description ? (
+                                            <div className="text-sm text-muted-foreground">
+                                              <span className="">
+                                                This payout was calculated from
+                                                cash collected in{" "}
+                                                <strong>
+                                                  {format(
+                                                    parse(
+                                                      p.sourceSummaryMonth,
+                                                      "yyyy-MM",
+                                                      new Date()
+                                                    ),
+                                                    "MMMM yyyy"
+                                                  )}
+                                                </strong>
+                                              </span>
+                                              <br />
+                                              {p.description}
+                                            </div>
+                                          ) : (
+                                            <div className="text-sm text-muted-foreground">
+                                              Bonus payout
+                                            </div>
                                           )}
-                                        </strong>
-                                        .
-                                      </div>
-                                      <div className="rounded-md border">
-                                        <Table>
-                                          <TableHeader>
-                                            <TableRow>
-                                              <TableHead>Deal ID</TableHead>
-                                              <TableHead>Deal Name</TableHead>
-                                              <TableHead className="text-right">
-                                                Amount Paid
-                                              </TableHead>
-                                              <TableHead>Deal Link</TableHead>
-                                            </TableRow>
-                                          </TableHeader>
-                                          <TableBody>
-                                            {p.sourceCashCollections.map(
-                                              (c: any) => (
-                                                <TableRow key={c.id}>
-                                                  <TableCell>
-                                                    {c.dealId}
-                                                  </TableCell>
-                                                  <TableCell>
-                                                    {c.dealName ?? "—"}
-                                                  </TableCell>
-                                                  <TableCell className="text-right">
-                                                    {formatCurrency(
-                                                      c.amountPaid
-                                                    )}
-                                                  </TableCell>
-                                                  <TableCell>
-                                                    {c.dealLink ? (
-                                                      <a
-                                                        href={c.dealLink}
-                                                        target="_blank"
-                                                        rel="noreferrer"
-                                                        className="text-primary underline-offset-4 hover:underline"
-                                                      >
-                                                        Open
-                                                      </a>
-                                                    ) : (
-                                                      <span className="text-muted-foreground">
-                                                        —
-                                                      </span>
-                                                    )}
-                                                  </TableCell>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <div className="text-sm text-muted-foreground mb-2">
+                                            This payout was calculated from cash
+                                            collected in{" "}
+                                            <strong>
+                                              {format(
+                                                parse(
+                                                  p.sourceSummaryMonth,
+                                                  "yyyy-MM",
+                                                  new Date()
+                                                ),
+                                                "MMMM yyyy"
+                                              )}
+                                            </strong>
+                                            .
+                                          </div>
+                                          <div className="rounded-md border">
+                                            <Table>
+                                              <TableHeader>
+                                                <TableRow>
+                                                  <TableHead>Deal ID</TableHead>
+                                                  <TableHead>
+                                                    Deal Name
+                                                  </TableHead>
+                                                  <TableHead className="text-right">
+                                                    Amount Paid
+                                                  </TableHead>
+                                                  <TableHead>
+                                                    Deal Link
+                                                  </TableHead>
                                                 </TableRow>
-                                              )
-                                            )}
-                                            <TableRow>
-                                              <TableCell
-                                                colSpan={2}
-                                                className="font-medium"
-                                              >
-                                                Total
-                                              </TableCell>
-                                              <TableCell className="text-right font-medium">
-                                                {formatCurrency(totalSource)}
-                                              </TableCell>
-                                              <TableCell />
-                                            </TableRow>
-                                          </TableBody>
-                                        </Table>
-                                      </div>
+                                              </TableHeader>
+                                              <TableBody>
+                                                {p.sourceCashCollections.map(
+                                                  (c: any) => (
+                                                    <TableRow key={c.id}>
+                                                      <TableCell>
+                                                        {c.dealId}
+                                                      </TableCell>
+                                                      <TableCell>
+                                                        {c.dealName ?? "—"}
+                                                      </TableCell>
+                                                      <TableCell className="text-right">
+                                                        {formatCurrency(
+                                                          c.amountPaid
+                                                        )}
+                                                      </TableCell>
+                                                      <TableCell>
+                                                        {c.dealLink ? (
+                                                          <a
+                                                            href={c.dealLink}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="text-primary underline-offset-4 hover:underline"
+                                                          >
+                                                            Open
+                                                          </a>
+                                                        ) : (
+                                                          <span className="text-muted-foreground">
+                                                            —
+                                                          </span>
+                                                        )}
+                                                      </TableCell>
+                                                    </TableRow>
+                                                  )
+                                                )}
+                                                <TableRow>
+                                                  <TableCell
+                                                    colSpan={2}
+                                                    className="font-medium"
+                                                  >
+                                                    Total
+                                                  </TableCell>
+                                                  <TableCell className="text-right font-medium">
+                                                    {formatCurrency(
+                                                      totalSource
+                                                    )}
+                                                  </TableCell>
+                                                  <TableCell />
+                                                </TableRow>
+                                              </TableBody>
+                                            </Table>
+                                          </div>
+                                        </>
+                                      )}
                                     </CardContent>
                                   </Card>
                                 );

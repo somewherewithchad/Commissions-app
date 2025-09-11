@@ -77,12 +77,13 @@ model RecruiterCollection {
 }
 
 model RecruiterPayout {
-  id                   String @id @default(cuid())
+  id                   String  @id @default(cuid())
   amount               Float
   commissionRate       Float
   payoutMonth          String
   sourceSummaryMonth   String
   sourceRecruiterEmail String
+  description          String? @db.Text
 
   recruiter Recruiter @relation(fields: [sourceRecruiterEmail], references: [email])
 }
