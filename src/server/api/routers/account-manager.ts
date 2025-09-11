@@ -450,13 +450,14 @@ export const accountManagerRouter = createTRPCRouter({
           for (let i = 0; i < collections.length; i++) {
             const col = collections[i]!;
 
-            // Find invoice month for this deal
+            // Find invoice month and ownership for this deal
             const invoice = await ctx.db.accountManagerInvoice.findFirst({
               where: {
                 accountManagerEmail: accountManager,
-                dealId: col.dealId,
+                // Handle negative-adjustment invoice ids that may have a suffix
+                dealId: { startsWith: col.dealId.split("-")[0] },
               },
-              select: { month: true },
+              select: { month: true, isDealOwner: true },
             });
 
             // Determine total invoiced for that invoice month (0 if not found)
@@ -513,6 +514,20 @@ export const accountManagerRouter = createTRPCRouter({
                   payoutMonth: nextMonth,
                   sourceSummaryMonth: month,
                   sourceAccountManagerEmail: accountManager,
+                },
+              });
+            }
+
+            // Additional: Deal owner bonus 1% in current month for non-Americans
+            if (invoice && invoice.isDealOwner) {
+              await ctx.db.accountManagerPayout.create({
+                data: {
+                  amount: col.amountPaid * 0.01,
+                  commissionRate: 0.01,
+                  payoutMonth: month,
+                  sourceSummaryMonth: month,
+                  sourceAccountManagerEmail: accountManager,
+                  isDealOwnerBonus: true,
                 },
               });
             }
