@@ -37,6 +37,239 @@ export const accountManagerRouter = createTRPCRouter({
         pageCount,
       };
     }),
+  getManagerData: protectedProcedure
+    .input(z.object({ year: z.string().regex(/^\d{4}$/) }))
+    .query(async ({ ctx, input }) => {
+      const managerEmail = ctx.session.user.email;
+
+      const summaries = await ctx.db.accountManagerMonthlySummary.findMany({
+        where: {
+          accountManagerEmail: managerEmail,
+          month: { startsWith: input.year },
+        },
+      });
+      const payouts = await ctx.db.accountManagerPayout.findMany({
+        where: {
+          sourceAccountManagerEmail: managerEmail,
+          payoutMonth: { startsWith: input.year },
+        },
+      });
+
+      const summaryMap = new Map(summaries.map((s) => [s.month, s]));
+      const payoutMap = new Map<string, number>();
+      for (const p of payouts) {
+        payoutMap.set(
+          p.payoutMonth,
+          (payoutMap.get(p.payoutMonth) ?? 0) + p.amount
+        );
+      }
+
+      const results = Array.from({ length: 12 }, (_, i) => {
+        const month = `${input.year}-${String(i + 1).padStart(2, "0")}`;
+        const summary = summaryMap.get(month) ?? {
+          totalInvoiced: 0,
+          totalCollections: 0,
+        };
+        const totalPayout = payoutMap.get(month) ?? 0;
+        return {
+          month,
+          totalInvoiced: summary.totalInvoiced,
+          totalCollections: summary.totalCollections,
+          totalPayout,
+        };
+      });
+
+      return results;
+    }),
+  getManagerMonthDetails: protectedProcedure
+    .input(z.object({ month: z.string().regex(/^\d{4}-\d{2}$/) }))
+    .query(async ({ ctx, input }) => {
+      const managerEmail = ctx.session.user.email;
+
+      const payoutsRaw = await ctx.db.accountManagerPayout.findMany({
+        where: {
+          sourceAccountManagerEmail: managerEmail,
+          payoutMonth: input.month,
+        },
+        orderBy: { amount: "desc" },
+      });
+      if (payoutsRaw.length === 0) return { payouts: [] as const } as const;
+
+      const sourceMonths = Array.from(
+        new Set(payoutsRaw.map((p) => p.sourceSummaryMonth))
+      );
+
+      const allCollections = await ctx.db.accountManagerCollection.findMany({
+        where: {
+          accountManagerEmail: managerEmail,
+          month: { in: sourceMonths },
+        },
+      });
+      const keyFor = (email: string, month: string) => `${email}__${month}`;
+      const collectionsByKey = new Map<string, typeof allCollections>();
+      for (const c of allCollections) {
+        const k = keyFor(c.accountManagerEmail, c.month);
+        const list = collectionsByKey.get(k);
+        if (list) list.push(c);
+        else collectionsByKey.set(k, [c]);
+      }
+
+      const allDealIds = Array.from(
+        new Set(allCollections.map((c) => c.dealId))
+      );
+      const relatedInvoices = await ctx.db.accountManagerInvoice.findMany({
+        where: {
+          dealId: { in: allDealIds },
+          accountManagerEmail: managerEmail,
+        },
+      });
+      const dealIdToInvoice = new Map(
+        relatedInvoices.map((inv) => [inv.dealId, inv])
+      );
+
+      const uniqueInvoiceMonths = Array.from(
+        new Set(relatedInvoices.map((inv) => inv.month))
+      );
+      const monthlySummaries =
+        await ctx.db.accountManagerMonthlySummary.findMany({
+          where: {
+            accountManagerEmail: managerEmail,
+            month: { in: uniqueInvoiceMonths },
+          },
+        });
+      const monthToInvoiceTotal = new Map(
+        monthlySummaries.map((s) => [s.month, s.totalInvoiced])
+      );
+
+      const approxEqual = (a: number, b: number, eps = 0.01) =>
+        Math.abs(a - b) <= eps;
+      const usedCollectionIdsByKey = new Map<string, Set<string>>();
+      const usedOwnerCollectionIdsByKey = new Map<string, Set<string>>();
+
+      const managerRecord = await ctx.db.accountManager.findUnique({
+        where: { email: managerEmail },
+      });
+      const isAmerican = !!managerRecord?.isAmerican;
+
+      const payouts = await Promise.all(
+        payoutsRaw.map(async (p) => {
+          const isBonus = p.payoutMonth !== p.sourceSummaryMonth;
+          const isOwnerBonus = !!p.isDealOwnerBonus;
+          const k = keyFor(managerEmail, p.sourceSummaryMonth);
+          const ownerUsed =
+            usedOwnerCollectionIdsByKey.get(k) ?? new Set<string>();
+          const nonOwnerUsed =
+            usedCollectionIdsByKey.get(k) ?? new Set<string>();
+          const allCandidates = collectionsByKey.get(k) ?? [];
+          const candidates = isOwnerBonus
+            ? allCandidates.filter((c) => !ownerUsed.has(c.id))
+            : allCandidates.filter((c) => !nonOwnerUsed.has(c.id));
+
+          let matched: (typeof candidates)[number] | null = null;
+          let sourceInvoiceMonth = p.sourceSummaryMonth;
+          let sourceInvoiceTotal = 0;
+          const rate = p.commissionRate;
+
+          if (rate > 0) {
+            const target = p.amount / rate;
+            const matches = candidates.filter((c) =>
+              approxEqual(c.amountPaid, target)
+            );
+            if (matches.length > 0) {
+              if (isOwnerBonus) {
+                matched =
+                  matches.find(
+                    (c) => dealIdToInvoice.get(c.dealId)?.isDealOwner === true
+                  ) ??
+                  matches.find((c) => dealIdToInvoice.has(c.dealId)) ??
+                  matches[0]!;
+              } else {
+                matched =
+                  matches.find((c) => dealIdToInvoice.has(c.dealId)) ??
+                  matches[0]!;
+              }
+            }
+          }
+
+          if (!matched && candidates.length > 0 && rate > 0) {
+            let best = candidates[0]!;
+            let bestDelta = Math.abs(p.amount - best.amountPaid * rate);
+            for (const c of candidates) {
+              const delta = Math.abs(p.amount - c.amountPaid * rate);
+              const cHasInvoice = dealIdToInvoice.has(c.dealId);
+              const bestHasInvoice = dealIdToInvoice.has(best.dealId);
+              if (
+                delta < bestDelta ||
+                (Math.abs(delta - bestDelta) <= 1e-6 &&
+                  (isOwnerBonus
+                    ? dealIdToInvoice.get(c.dealId)?.isDealOwner === true
+                    : cHasInvoice) &&
+                  !bestHasInvoice)
+              ) {
+                best = c;
+                bestDelta = delta;
+              }
+            }
+            matched = best;
+          }
+
+          if (matched) {
+            if (isOwnerBonus) {
+              ownerUsed.add(matched.id);
+              if (!usedOwnerCollectionIdsByKey.has(k))
+                usedOwnerCollectionIdsByKey.set(k, ownerUsed);
+            } else {
+              nonOwnerUsed.add(matched.id);
+              if (!usedCollectionIdsByKey.has(k))
+                usedCollectionIdsByKey.set(k, nonOwnerUsed);
+            }
+            const inv = dealIdToInvoice.get(matched.dealId);
+            if (inv) {
+              sourceInvoiceMonth = inv.month;
+              sourceInvoiceTotal = monthToInvoiceTotal.get(inv.month) ?? 0;
+            }
+          }
+
+          const type = isOwnerBonus
+            ? ("owner-bonus" as const)
+            : isBonus
+            ? ("bonus" as const)
+            : ("base" as const);
+
+          const sourceCollections =
+            isAmerican && type === "base"
+              ? (collectionsByKey.get(k) ?? []).map((c) => ({
+                  id: c.id,
+                  dealId: c.dealId,
+                  dealName: dealIdToInvoice.get(c.dealId)?.dealName ?? null,
+                  dealLink: dealIdToInvoice.get(c.dealId)?.dealLink ?? null,
+                  amountPaid: c.amountPaid,
+                }))
+              : undefined;
+
+          return {
+            ...p,
+            type,
+            sourceInvoiceMonth,
+            sourceInvoiceTotal,
+            sourceCollection: matched
+              ? {
+                  id: matched.id,
+                  dealId: matched.dealId,
+                  dealName:
+                    dealIdToInvoice.get(matched.dealId)?.dealName ?? null,
+                  dealLink:
+                    dealIdToInvoice.get(matched.dealId)?.dealLink ?? null,
+                  amountPaid: matched.amountPaid,
+                }
+              : null,
+            sourceCollections,
+          } as const;
+        })
+      );
+
+      return { payouts } as const;
+    }),
   getPayoutsByMonth: protectedProcedure
     .input(z.object({ month: z.string().regex(/^\d{4}-\d{2}$/) }))
     .query(async ({ ctx, input }) => {
