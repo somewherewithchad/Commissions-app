@@ -410,10 +410,13 @@ export const accountManagerRouter = createTRPCRouter({
           // Deal owner bonus: 2% of each collection row in current month
           for (let i = 0; i < collections.length; i++) {
             const col = collections[i]!;
+
             const inv = await ctx.db.accountManagerInvoice.findFirst({
               where: {
                 accountManagerEmail: accountManager,
-                dealId: col.dealId,
+                dealId: {
+                  startsWith: col.dealId.split("-")[0],
+                },
               },
               select: { isDealOwner: true },
             });
