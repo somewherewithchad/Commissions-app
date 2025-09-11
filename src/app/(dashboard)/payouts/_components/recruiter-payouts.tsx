@@ -184,13 +184,6 @@ export function RecruiterPayouts({ selected }: { selected: Date | null }) {
                                               </span>
                                               <br />
                                               {p.description}
-                                              <br />
-                                              <span className="text-gray-700">
-                                                * Only applicable to those
-                                                recruiters that have exceeded
-                                                $30,000 collected deal fees in
-                                                the previous month
-                                              </span>
                                             </div>
                                           ) : (
                                             <div className="text-sm text-muted-foreground">
