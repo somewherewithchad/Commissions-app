@@ -174,7 +174,42 @@ export function AccountManagerPayouts({ selected }: { selected: Date | null }) {
                                             </TableRow>
                                           </TableHeader>
                                           <TableBody>
-                                            {p.sourceCollection ? (
+                                            {p.sourceCollections &&
+                                            p.sourceCollections.length > 0 ? (
+                                              p.sourceCollections.map(
+                                                (c: any) => (
+                                                  <TableRow key={c.id}>
+                                                    <TableCell>
+                                                      {c.dealId}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                      {c.dealName ?? "—"}
+                                                    </TableCell>
+                                                    <TableCell className="text-right">
+                                                      {formatCurrency(
+                                                        c.amountPaid
+                                                      )}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                      {c.dealLink ? (
+                                                        <a
+                                                          href={c.dealLink}
+                                                          target="_blank"
+                                                          rel="noreferrer"
+                                                          className="text-primary underline-offset-4 hover:underline"
+                                                        >
+                                                          Open
+                                                        </a>
+                                                      ) : (
+                                                        <span className="text-muted-foreground">
+                                                          —
+                                                        </span>
+                                                      )}
+                                                    </TableCell>
+                                                  </TableRow>
+                                                )
+                                              )
+                                            ) : p.sourceCollection ? (
                                               <TableRow>
                                                 <TableCell>
                                                   {p.sourceCollection.dealId}

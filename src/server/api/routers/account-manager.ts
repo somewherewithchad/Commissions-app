@@ -119,6 +119,7 @@ export const accountManagerRouter = createTRPCRouter({
           const isBonus = p.payoutMonth !== p.sourceSummaryMonth;
           const isOwnerBonus = !!p.isDealOwnerBonus;
           const k = keyFor(p.sourceAccountManagerEmail, p.sourceSummaryMonth);
+          const manager = emailToManager.get(p.sourceAccountManagerEmail);
           const ownerUsedSet =
             usedOwnerCollectionIdsByKey.get(k) ?? new Set<string>();
           const nonOwnerUsedSet =
@@ -205,6 +206,18 @@ export const accountManagerRouter = createTRPCRouter({
             ? ("bonus" as const)
             : ("base" as const);
 
+          // For American base payouts, expose all collections that contributed
+          const sourceCollections =
+            manager?.isAmerican && type === "base"
+              ? (collectionsByEmailMonth.get(k) ?? []).map((c) => ({
+                  id: c.id,
+                  dealId: c.dealId,
+                  dealName: dealIdToInvoice.get(c.dealId)?.dealName ?? null,
+                  dealLink: dealIdToInvoice.get(c.dealId)?.dealLink ?? null,
+                  amountPaid: c.amountPaid,
+                }))
+              : undefined;
+
           return {
             ...p,
             managerName:
@@ -223,6 +236,7 @@ export const accountManagerRouter = createTRPCRouter({
                   amountPaid: matched.amountPaid,
                 }
               : null,
+            sourceCollections,
           } as const;
         })
       );
