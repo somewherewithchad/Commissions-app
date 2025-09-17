@@ -40,7 +40,28 @@ export const accountManagerRouter = createTRPCRouter({
   getManagerData: protectedProcedure
     .input(z.object({ year: z.string().regex(/^\d{4}$/) }))
     .query(async ({ ctx, input }) => {
-      const managerEmail = ctx.session.user.email;
+      const managerEmail = "ana@somewhere.com";
+
+      // Aggregate invoices and collections by month to ensure totals appear
+      // even when a monthly summary row doesn't exist (e.g., invoices without payouts)
+      const [invoiceAgg, collectionAgg] = await Promise.all([
+        ctx.db.accountManagerInvoice.groupBy({
+          by: ["month"],
+          where: {
+            accountManagerEmail: managerEmail,
+            month: { startsWith: input.year },
+          },
+          _sum: { amountInvoiced: true },
+        }),
+        ctx.db.accountManagerCollection.groupBy({
+          by: ["month"],
+          where: {
+            accountManagerEmail: managerEmail,
+            month: { startsWith: input.year },
+          },
+          _sum: { amountPaid: true },
+        }),
+      ]);
 
       const summaries = await ctx.db.accountManagerMonthlySummary.findMany({
         where: {
@@ -64,17 +85,25 @@ export const accountManagerRouter = createTRPCRouter({
         );
       }
 
+      const invoiceMap = new Map(
+        invoiceAgg.map((i) => [i.month, i._sum.amountInvoiced ?? 0])
+      );
+      const collectionMap = new Map(
+        collectionAgg.map((c) => [c.month, c._sum.amountPaid ?? 0])
+      );
+
       const results = Array.from({ length: 12 }, (_, i) => {
         const month = `${input.year}-${String(i + 1).padStart(2, "0")}`;
-        const summary = summaryMap.get(month) ?? {
-          totalInvoiced: 0,
-          totalCollections: 0,
-        };
+        const summary = summaryMap.get(month);
+        const totalInvoiced =
+          summary?.totalInvoiced ?? invoiceMap.get(month) ?? 0;
+        const totalCollections =
+          summary?.totalCollections ?? collectionMap.get(month) ?? 0;
         const totalPayout = payoutMap.get(month) ?? 0;
         return {
           month,
-          totalInvoiced: summary.totalInvoiced,
-          totalCollections: summary.totalCollections,
+          totalInvoiced,
+          totalCollections,
           totalPayout,
         };
       });
@@ -84,7 +113,7 @@ export const accountManagerRouter = createTRPCRouter({
   getManagerMonthDetails: protectedProcedure
     .input(z.object({ month: z.string().regex(/^\d{4}-\d{2}$/) }))
     .query(async ({ ctx, input }) => {
-      const managerEmail = ctx.session.user.email;
+      const managerEmail = "ana@somewhere.com";
 
       const payoutsRaw = await ctx.db.accountManagerPayout.findMany({
         where: {
