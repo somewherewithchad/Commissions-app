@@ -40,7 +40,7 @@ export const accountManagerRouter = createTRPCRouter({
   getManagerData: protectedProcedure
     .input(z.object({ year: z.string().regex(/^\d{4}$/) }))
     .query(async ({ ctx, input }) => {
-      const managerEmail = "ana@somewhere.com";
+      const managerEmail = ctx.session.user.email;
 
       // Aggregate invoices and collections by month to ensure totals appear
       // even when a monthly summary row doesn't exist (e.g., invoices without payouts)
@@ -113,7 +113,7 @@ export const accountManagerRouter = createTRPCRouter({
   getManagerMonthDetails: protectedProcedure
     .input(z.object({ month: z.string().regex(/^\d{4}-\d{2}$/) }))
     .query(async ({ ctx, input }) => {
-      const managerEmail = "ana@somewhere.com";
+      const managerEmail = ctx.session.user.email;
 
       const payoutsRaw = await ctx.db.accountManagerPayout.findMany({
         where: {
